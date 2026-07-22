@@ -7,25 +7,25 @@
 当前默认模式是 `single`，即根据一个相机位置和一个相机朝向只渲染一张 RGB 图像。下面这条命令可以从扫描起点 `(0, 0, 0)` 朝 `-X` 方向渲染一张图：
 
 ```powershell
-python C:\task\xlk_work\tools\render_one_view.py `
-  --ply C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply `
+python .\camera_render\render_one_view.py `
+  --ply ..\MindCloudXAI_output\test1_yup.ply `
   --eye 0 0 0 `
   --look-dir -1 0 0 `
   --fov 70 `
   --near-plane 0.001 `
-  --out C:\task\xlk_work\tools\render_output2D\single_origin_negx.png
+  --out .\render_output2D\single_origin_negx.png
 ```
 
 如果想一次从扫描起点 `(0, 0, 0)` 朝六个轴向都渲染图像，可以显式使用 `panorama` 模式：
 
 ```powershell
-python C:\task\xlk_work\tools\render_one_view.py `
-  --ply C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply `
+python .\camera_render\render_one_view.py `
+  --ply ..\MindCloudXAI_output\test1_yup.ply `
   --mode panorama `
   --eye 0 0 0 `
   --fov 70 `
   --near-plane 0.001 `
-  --output-dir C:\task\xlk_work\tools\render_output2D\origin_panorama
+  --output-dir .\render_output2D\origin_panorama
 ```
 
 `single` 模式会生成一张 PNG；`panorama` 模式会生成 6 张 PNG 和一个 `render_manifest.txt`。文件名中会包含相机位置 `eye` 和朝向目标点 `tgt`，便于回溯每张图对应的虚拟相机参数。
@@ -59,24 +59,24 @@ python C:\task\xlk_work\tools\render_one_view.py `
 使用 `--look-dir` 指定朝向：
 
 ```powershell
-python C:\task\xlk_work\tools\render_one_view.py `
-  --ply C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply `
+python .\camera_render\render_one_view.py `
+  --ply ..\MindCloudXAI_output\test1_yup.ply `
   --mode single `
   --eye 0 0 0 `
   --look-dir -1 0 0 `
   --fov 70 `
-  --out C:\task\xlk_work\tools\render_output2D\single_origin_negx.png
+  --out .\render_output2D\single_origin_negx.png
 ```
 
 使用 `--look-at` 指定目标点：
 
 ```powershell
-python C:\task\xlk_work\tools\render_one_view.py `
-  --ply C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply `
+python .\camera_render\render_one_view.py `
+  --ply ..\MindCloudXAI_output\test1_yup.ply `
   --mode single `
   --eye 0 0 0 `
   --look-at -1 0 0 `
-  --out C:\task\xlk_work\tools\render_output2D\single_origin_lookat.png
+  --out .\render_output2D\single_origin_lookat.png
 ```
 
 如果已有完整外参矩阵，可以用 `--viewmat` 传入 row-major 的 world-to-camera 4x4 矩阵。此时 `--eye`、`--look-at`、`--look-dir` 会被忽略。
@@ -88,12 +88,12 @@ python C:\task\xlk_work\tools\render_one_view.py `
 `panorama` 模式把相机固定在 `--eye X Y Z`，然后朝六个轴向看。它适合快速检查某个轨迹点周围是否能看到正确内容。
 
 ```powershell
-python C:\task\xlk_work\tools\render_one_view.py `
-  --ply C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply `
+python .\camera_render\render_one_view.py `
+  --ply ..\MindCloudXAI_output\test1_yup.ply `
   --mode panorama `
   --eye 0 0 0 `
   --fov 70 `
-  --output-dir C:\task\xlk_work\tools\render_output2D\origin_panorama
+  --output-dir .\render_output2D\origin_panorama
 ```
 
 后续正式生成训练数据时，可以先用 `panorama` 检查，再用 `single` 按需要的相机朝向逐张生成。

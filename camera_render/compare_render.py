@@ -24,10 +24,12 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
-DEFAULT_LAS = r"C:\task\xlk_work\MindCloudXAI_output\test1-pointcloud-0704.las"
-DEFAULT_PLY = r"C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply"
-##DEFAULT_PLY = r"C:\task\xlk_work\MindCloudXAI_output\test1_ply_zup.ply"
-DEFAULT_OUTPUT_DIR = r"C:\task\xlk_work\tools\render_output2D\compare_las_ply_origin"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
+
+DEFAULT_LAS = DATA_DIR / "test1-pointcloud-0704.las"
+DEFAULT_PLY = DATA_DIR / "test1_yup.ply"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "render_output2D" / "compare_las_ply_origin"
 
 
 def parse_las_header(path):
@@ -303,9 +305,9 @@ def parse_args():
             "to visually check whether their coordinate systems agree."
         )
     )
-    parser.add_argument("--las", default=DEFAULT_LAS)
-    parser.add_argument("--ply", default=DEFAULT_PLY)
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--las", default=str(DEFAULT_LAS))
+    parser.add_argument("--ply", default=str(DEFAULT_PLY))
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fov", type=float, default=50.0)

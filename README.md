@@ -28,6 +28,26 @@ Install the remaining Python dependencies:
 python -m pip install -r requirements.txt
 ```
 
+## Data Files
+
+The default scripts expect LAS/PLY files exported from the LiXingYun platform to be placed next to this repository, under:
+
+```python
+DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
+```
+
+Recommended layout:
+
+```text
+xlk_work/
+  ZJUgive_DataEngine_For_RobotNav/
+  MindCloudXAI_output/
+    test1-pointcloud-0704.las
+    test1_yup.ply
+```
+
+With this layout, the default input paths resolve automatically. Render outputs are written under `render_output2D/`, and trajectory outputs are written under `trajectory_work/outputs/`.
+
 This environment pins PyTorch `2.1.2+cu121` and gsplat `1.5.2+pt21cu121` for Windows, Python 3.10, and CUDA 12.1.
 
 `requirements.txt` intentionally excludes `torch`, `torchvision`, and `gsplat` because those packages are tightly coupled to the operating system, Python version, PyTorch version, and CUDA version.

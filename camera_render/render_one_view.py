@@ -11,9 +11,11 @@ from gsplat import rasterization
 from plyfile import PlyData
 
 
-DEFAULT_PLY = r"C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply"
-##DEFAULT_PLY = r"C:\task\data\3DGS_source\阳台场景训练1_yup.ply"
-DEFAULT_OUTPUT_DIR = r"C:\task\xlk_work\tools\render_output2D"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
+
+DEFAULT_PLY = DATA_DIR / "test1_yup.ply"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "render_output2D"
 
 SH_C0 = 0.28209479177387814
 
@@ -289,10 +291,10 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Render multiple 2D views from a 3D Gaussian Splatting PLY file."
     )
-    parser.add_argument("--ply", default=DEFAULT_PLY, help="Input 3DGS PLY file.")
+    parser.add_argument("--ply", default=str(DEFAULT_PLY), help="Input 3DGS PLY file.")
     parser.add_argument(
         "--output-dir",
-        default=DEFAULT_OUTPUT_DIR,
+        default=str(DEFAULT_OUTPUT_DIR),
         help="Directory for rendered PNGs and manifest text.",
     )
     parser.add_argument(

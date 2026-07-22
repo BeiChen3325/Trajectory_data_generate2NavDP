@@ -8,9 +8,12 @@ import numpy as np
 from plyfile import PlyData
 
 
-DEFAULT_LAS = r"C:\task\xlk_work\MindCloudXAI_output\test1-pointcloud-0704.las"
-DEFAULT_PLY = r"C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply"
-DEFAULT_TXT = r"C:\task\xlk_work\tools\point_sample_report.txt"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
+
+DEFAULT_LAS = DATA_DIR / "test1-pointcloud-0704.las"
+DEFAULT_PLY = DATA_DIR / "test1_yup.ply"
+DEFAULT_TXT = PROJECT_ROOT / "render_output2D" / "point_sample_report.txt"
 SH_C0 = 0.28209479177387814
 
 
@@ -286,8 +289,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Inspect LAS header/point samples and 3DGS PLY gaussian samples."
     )
-    parser.add_argument("--las", default=DEFAULT_LAS, help="Input LAS file.")
-    parser.add_argument("--ply", default=DEFAULT_PLY, help="Input 3DGS PLY file.")
+    parser.add_argument("--las", default=str(DEFAULT_LAS), help="Input LAS file.")
+    parser.add_argument("--ply", default=str(DEFAULT_PLY), help="Input 3DGS PLY file.")
     parser.add_argument("--count", type=int, default=3, help="Number of samples per file.")
     parser.add_argument("--seed", type=int, default=7, help="Random seed.")
     parser.add_argument(
@@ -296,7 +299,7 @@ def parse_args():
         default=12000,
         help="Save to text file if report length exceeds this many characters.",
     )
-    parser.add_argument("--txt", default=DEFAULT_TXT, help="Output text path if needed.")
+    parser.add_argument("--txt", default=str(DEFAULT_TXT), help="Output text path if needed.")
     return parser.parse_args()
 
 

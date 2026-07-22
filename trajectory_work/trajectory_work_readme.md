@@ -26,20 +26,20 @@
 在能读取本项目 Python 依赖的环境中运行：
 
 ```powershell
-cd C:\task\xlk_work\tools\trajectory_work
-python .\generate_trajectory.py
+cd ..\ZJUgive_DataEngine_For_RobotNav
+python .\trajectory_work\generate_trajectory.py
 ```
 
 常用参数：
 
 ```powershell
-python .\generate_trajectory.py --robot-height 0.8 --robot-radius 0.25 --resolution 0.08
-python .\generate_trajectory.py --start-xz -3.0,1.0 --goal-xz 2.0,8.0
-python .\generate_trajectory.py --floor-y 0.247
-python .\generate_trajectory.py --floor-search-y-min 0 --floor-search-y-max 3
-python .\generate_trajectory.py --roi-center-xz 0,0 --roi-size-xz 12,12
-python .\generate_trajectory.py --roi-center-xz none --roi-size-xz none
-python .\generate_trajectory.py --resolution 0.2 --floor-sample-limit 200000 --max-stream-points 2000000
+python .\trajectory_work\generate_trajectory.py --robot-height 0.8 --robot-radius 0.25 --resolution 0.08
+python .\trajectory_work\generate_trajectory.py --start-xz -3.0,1.0 --goal-xz 2.0,8.0
+python .\trajectory_work\generate_trajectory.py --floor-y 0.247
+python .\trajectory_work\generate_trajectory.py --floor-search-y-min 0 --floor-search-y-max 3
+python .\trajectory_work\generate_trajectory.py --roi-center-xz 0,0 --roi-size-xz 12,12
+python .\trajectory_work\generate_trajectory.py --roi-center-xz none --roi-size-xz none
+python .\trajectory_work\generate_trajectory.py --resolution 0.2 --floor-sample-limit 200000 --max-stream-points 2000000
 ```
 
 默认会只处理原点附近 `12m x 12m` 的 ROI。地面估计默认只在：
@@ -53,7 +53,7 @@ python .\generate_trajectory.py --resolution 0.2 --floor-sample-limit 200000 --m
 `render_one_view.py` 现在默认 `--unit-scale 1.0`，和 `compare_render.py`、`trajectory_work` 使用同一套 LAS/PLY 坐标。后续把轨迹接到 3DGS 渲染时不需要再额外缩放轨迹点。
 
 ```powershell
-python C:\task\xlk_work\tools\render_one_view.py --ply C:\task\xlk_work\MindCloudXAI_output\test1_yup.ply --unit-scale 1.0
+python .\camera_render\render_one_view.py --ply ..\MindCloudXAI_output\test1_yup.ply --unit-scale 1.0
 ```
 
 ## 主要输出
@@ -61,7 +61,7 @@ python C:\task\xlk_work\tools\render_one_view.py --ply C:\task\xlk_work\MindClou
 默认输出目录：
 
 ```text
-C:\task\xlk_work\tools\trajectory_work\outputs
+.\trajectory_work\outputs
 ```
 
 关键输出：
