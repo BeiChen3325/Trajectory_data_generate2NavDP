@@ -39,7 +39,7 @@ DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
 Recommended layout:
 
 ```text
-xlk_work/
+xxx/
   ZJUgive_DataEngine_For_RobotNav/
   MindCloudXAI_output/
     test1-pointcloud-0704.las
