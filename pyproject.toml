@@ -27,6 +27,7 @@ dev = [
 [project.scripts]
 robotnav-env-check = "robotnav.env_check:main"
 robotnav-render = "robotnav.rendering.render_one_view:render_batch"
+robotnav-depth = "robotnav.rendering.depth_render:main"
 robotnav-compare = "robotnav.rendering.compare_render:main"
 robotnav-trajectory = "robotnav.generate_trajectory:main"
 
