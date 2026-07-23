@@ -7,12 +7,8 @@ from pathlib import Path
 import numpy as np
 from plyfile import PlyData
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data" / "input"
+from robotnav.config import load_render_config
 
-DEFAULT_LAS = DATA_DIR / "try1-pointcloud-0706.las"
-DEFAULT_PLY = DATA_DIR / "try1_yup.ply"
-DEFAULT_TXT = PROJECT_ROOT / "outputs" / "render" / "point_sample_report.txt"
 SH_C0 = 0.28209479177387814
 
 
@@ -285,20 +281,25 @@ def build_report(args):
 
 
 def parse_args():
+    config = load_render_config()
     parser = argparse.ArgumentParser(
         description="Inspect LAS header/point samples and 3DGS PLY gaussian samples."
     )
-    parser.add_argument("--las", default=str(DEFAULT_LAS), help="Input LAS file.")
-    parser.add_argument("--ply", default=str(DEFAULT_PLY), help="Input 3DGS PLY file.")
+    parser.add_argument("--las", default=str(config.paths.las_path), help="Input LAS file.")
+    parser.add_argument("--ply", default=str(config.paths.ply_path), help="Input 3DGS PLY file.")
     parser.add_argument("--count", type=int, default=3, help="Number of samples per file.")
-    parser.add_argument("--seed", type=int, default=7, help="Random seed.")
+    parser.add_argument("--seed", type=int, default=config.runtime.seed, help="Random seed.")
     parser.add_argument(
         "--save-threshold",
         type=int,
         default=12000,
         help="Save to text file if report length exceeds this many characters.",
     )
-    parser.add_argument("--txt", default=str(DEFAULT_TXT), help="Output text path if needed.")
+    parser.add_argument(
+        "--txt",
+        default=str(config.paths.output_dir / "point_sample_report.txt"),
+        help="Output text path if needed.",
+    )
     return parser.parse_args()
 
 

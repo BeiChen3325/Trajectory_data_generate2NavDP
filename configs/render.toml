@@ -1,6 +1,7 @@
 [paths]
-ply = "data/input/try1_yup.ply"
-las = "data/input/try1-pointcloud-0706.las"
+data_dir = "data/input"
+ply_filename = "try1_yup.ply"
+las_filename = "try1-pointcloud-0706.las"
 output_dir = "outputs/render"
 
 [camera]

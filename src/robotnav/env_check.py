@@ -10,7 +10,10 @@ import importlib
 import shutil
 import sys
 
-from robotnav.paths import DATA_DIR, ensure_output_dirs
+from robotnav.config import ensure_output_dirs, load_path_config
+
+PATHS = load_path_config("trajectory.toml")
+DATA_DIR = PATHS.data_dir
 
 
 def check_base_dependencies() -> None:

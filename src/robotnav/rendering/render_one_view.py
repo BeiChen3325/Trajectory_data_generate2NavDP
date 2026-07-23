@@ -10,11 +10,7 @@ import torch.nn.functional as F
 from gsplat import rasterization
 from plyfile import PlyData
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data" / "input"
-
-DEFAULT_PLY = DATA_DIR / "try1_yup.ply"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "render"
+from robotnav.config import load_render_config
 
 SH_C0 = 0.28209479177387814
 
@@ -300,13 +296,14 @@ def make_view_specs():
 
 
 def parse_args():
+    config = load_render_config()
     parser = argparse.ArgumentParser(
         description="Render multiple 2D views from a 3D Gaussian Splatting PLY file."
     )
-    parser.add_argument("--ply", default=str(DEFAULT_PLY), help="Input 3DGS PLY file.")
+    parser.add_argument("--ply", default=str(config.paths.ply_path), help="Input 3DGS PLY file.")
     parser.add_argument(
         "--output-dir",
-        default=str(DEFAULT_OUTPUT_DIR),
+        default=str(config.paths.output_dir),
         help="Directory for rendered PNGs and manifest text.",
     )
     parser.add_argument(
@@ -314,9 +311,9 @@ def parse_args():
         default="",
         help="Optional output PNG path for single mode.",
     )
-    parser.add_argument("--width", type=int, default=640)
-    parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--fov", type=float, default=50.0, help="Horizontal-ish FOV.")
+    parser.add_argument("--width", type=int, default=config.camera.width)
+    parser.add_argument("--height", type=int, default=config.camera.height)
+    parser.add_argument("--fov", type=float, default=config.camera.fov, help="Horizontal-ish FOV.")
     parser.add_argument("--fx", type=float, default=None, help="Camera focal length fx.")
     parser.add_argument("--fy", type=float, default=None, help="Camera focal length fy.")
     parser.add_argument("--cx", type=float, default=None, help="Camera principal point cx.")
@@ -347,7 +344,7 @@ def parse_args():
     parser.add_argument(
         "--background",
         choices=["black", "white"],
-        default="black",
+        default=config.runtime.background,
         help="Background color for uncovered pixels.",
     )
     parser.add_argument(

@@ -1,54 +1,95 @@
-from dataclasses import dataclass
+"""Typed navigation configuration loaded from ``configs/trajectory.toml``."""
+
+from dataclasses import dataclass, fields
 from pathlib import Path
+from typing import Any, cast
 
-from robotnav.paths import DEFAULT_LAS, TRAJECTORY_OUTPUT_DIR
-
-DEFAULT_OUTPUT_DIR = TRAJECTORY_OUTPUT_DIR
+from robotnav.config import ConfigurationError, load_command_toml, load_path_config
 
 
-@dataclass
+@dataclass(frozen=True)
 class MapConfig:
-    las_path: Path = DEFAULT_LAS
-    output_dir: Path = DEFAULT_OUTPUT_DIR
-    axis_transform: str = "zup-to-yup"
-    floor_y_override: float | None = None
-    roi_center_xz: tuple[float, float] | None = (0.0, 0.0)
-    roi_size_xz: tuple[float, float] | None = (12.0, 12.0)
-    floor_search_y_min: float = 0.0
-    floor_search_y_max: float = 3.0
+    las_path: Path
+    output_dir: Path
+    axis_transform: str
+    floor_y_override: float | None
+    roi_center_xz: tuple[float, float] | None
+    roi_size_xz: tuple[float, float] | None
+    floor_search_y_min: float
+    floor_search_y_max: float
+    resolution_m: float
+    robot_radius_m: float
+    robot_height_m: float
+    ground_margin_m: float
+    safety_margin_m: float
+    ground_band_m: float
+    min_points_per_cell: int
+    min_ground_points_per_cell: int
+    open_kernel_cells: int
+    close_kernel_cells: int
+    min_obstacle_component_cells: int
+    ground_close_kernel_cells: int
+    chunk_size: int
+    max_stream_points: int
+    floor_sample_limit: int
+    floor_hist_bins: int
+    floor_xy_resolution_m: float
+    start_xz: tuple[float, float] | None
+    goal_xz: tuple[float, float] | None
+    min_start_goal_distance_m: float
+    obstacle_cost_weight: float
+    obstacle_cost_power: float
+    random_seed: int
+    shortcut_passes: int
+    smooth_samples_per_meter: float
 
-    # Y-up internal convention used by test1_yup.ply:
-    # physical downward is +Y, physical upward is -Y, ground plane is X-Z.
-    resolution_m: float = 0.08
-    robot_radius_m: float = 0.25
-    robot_height_m: float = 0.8
-    ground_margin_m: float = 0.06
-    safety_margin_m: float = 0.10
-    ground_band_m: float = 0.08
 
-    # Projection cleanup.
-    min_points_per_cell: int = 2
-    min_ground_points_per_cell: int = 2
-    open_kernel_cells: int = 1
-    close_kernel_cells: int = 2
-    min_obstacle_component_cells: int = 8
-    ground_close_kernel_cells: int = 2
+def _optional_pair(value: Any, name: str) -> tuple[float, float] | None:
+    if value == []:
+        return None
+    if not isinstance(value, list) or len(value) != 2:
+        raise ConfigurationError(f"[navigation].{name} must be [] or an array of two numbers")
+    if not all(isinstance(item, (int, float)) for item in value):
+        raise ConfigurationError(f"[navigation].{name} must contain only numbers")
+    return (float(value[0]), float(value[1]))
 
-    # LAS streaming.
-    chunk_size: int = 1_000_000
-    max_stream_points: int = 0
-    floor_sample_limit: int = 1_200_000
-    floor_hist_bins: int = 180
-    floor_xy_resolution_m: float = 0.25
 
-    # Planning.
-    start_xz: tuple[float, float] | None = None
-    goal_xz: tuple[float, float] | None = None
-    min_start_goal_distance_m: float = 3.0
-    obstacle_cost_weight: float = 0.8
-    obstacle_cost_power: float = 1.5
-    random_seed: int = 7
-
-    # Path post-processing.
-    shortcut_passes: int = 120
-    smooth_samples_per_meter: float = 8.0
+def load_map_config(filename: str = "trajectory.toml") -> MapConfig:
+    """Load the complete trajectory configuration without flattening TOML sections."""
+    raw = load_command_toml(filename, sections={"paths", "navigation"})
+    values = raw["navigation"]
+    if not isinstance(values, dict):
+        raise ConfigurationError("[navigation] must be a TOML table")
+    expected = {field.name for field in fields(MapConfig)} - {"las_path", "output_dir"}
+    missing = expected - values.keys()
+    unknown = values.keys() - expected
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append("missing keys: " + ", ".join(sorted(missing)))
+        if unknown:
+            details.append("unknown keys: " + ", ".join(sorted(unknown)))
+        raise ConfigurationError(f"Invalid [navigation] ({'; '.join(details)})")
+    if values["floor_y_override"] == "auto":
+        values = {**values, "floor_y_override": None}
+    elif not isinstance(values["floor_y_override"], (int, float)):
+        raise ConfigurationError("[navigation].floor_y_override must be a number or auto")
+    if values["axis_transform"] not in {"zup-to-yup", "none"}:
+        raise ConfigurationError("[navigation].axis_transform must be zup-to-yup or none")
+    if cast(float, values["resolution_m"]) <= 0 or cast(int, values["chunk_size"]) <= 0:
+        raise ConfigurationError("[navigation].resolution_m and chunk_size must be positive")
+    paths = load_path_config(filename)
+    return MapConfig(
+        las_path=paths.las_path,
+        output_dir=paths.output_dir,
+        **cast(
+            Any,
+            {
+                **values,
+                "roi_center_xz": _optional_pair(values["roi_center_xz"], "roi_center_xz"),
+                "roi_size_xz": _optional_pair(values["roi_size_xz"], "roi_size_xz"),
+                "start_xz": _optional_pair(values["start_xz"], "start_xz"),
+                "goal_xz": _optional_pair(values["goal_xz"], "goal_xz"),
+            },
+        ),
+    )

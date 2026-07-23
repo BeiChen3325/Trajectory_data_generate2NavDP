@@ -51,6 +51,3 @@ desktop.ini
 # Optional generated outputs. Uncomment these if they become large or reproducible.
 render_output2D/
 trajectory_work/outputs/
-
-# data file 
-data/

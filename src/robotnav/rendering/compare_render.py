@@ -24,12 +24,7 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data" / "input"
-
-DEFAULT_LAS = DATA_DIR / "try1-pointcloud-0706.las"
-DEFAULT_PLY = DATA_DIR / "try1_yup.ply"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "render" / "compare_las_ply"
+from robotnav.config import load_render_config
 
 
 def parse_las_header(path):
@@ -303,18 +298,19 @@ def save_depth_preview(zbuffer, path):
 
 
 def parse_args():
+    config = load_render_config()
     parser = argparse.ArgumentParser(
         description=(
             "Render one matched camera view from a LAS point cloud and a 3DGS PLY "
             "to visually check whether their coordinate systems agree."
         )
     )
-    parser.add_argument("--las", default=str(DEFAULT_LAS))
-    parser.add_argument("--ply", default=str(DEFAULT_PLY))
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--width", type=int, default=640)
-    parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--fov", type=float, default=50.0)
+    parser.add_argument("--las", default=str(config.paths.las_path))
+    parser.add_argument("--ply", default=str(config.paths.ply_path))
+    parser.add_argument("--output-dir", default=str(config.paths.output_dir / "compare_las_ply"))
+    parser.add_argument("--width", type=int, default=config.camera.width)
+    parser.add_argument("--height", type=int, default=config.camera.height)
+    parser.add_argument("--fov", type=float, default=config.camera.fov)
     parser.add_argument("--fx", type=float, default=None)
     parser.add_argument("--fy", type=float, default=None)
     parser.add_argument("--cx", type=float, default=None)
@@ -324,10 +320,14 @@ def parse_args():
     parser.add_argument("--look-dir", type=float, nargs=3, default=[-1.0, 0.0, 0.0])
     parser.add_argument("--viewmat", type=float, nargs=16, default=None)
     parser.add_argument("--look-distance", type=float, default=1.0)
-    parser.add_argument("--up-axis", choices=["+x", "-x", "+y", "-y", "+z", "-z"], default="-y")
+    parser.add_argument(
+        "--up-axis", choices=["+x", "-x", "+y", "-y", "+z", "-z"], default=config.camera.up_axis
+    )
     parser.add_argument("--near-plane", type=float, default=0.001)
     parser.add_argument("--far-plane", type=float, default=1.0e10)
-    parser.add_argument("--background", choices=["black", "white"], default="black")
+    parser.add_argument(
+        "--background", choices=["black", "white"], default=config.runtime.background
+    )
     parser.add_argument(
         "--ply-unit-scale",
         type=float,
@@ -336,7 +336,7 @@ def parse_args():
     )
     parser.add_argument("--max-gaussians", type=int, default=0)
     parser.add_argument("--sh-degree", default="auto")
-    parser.add_argument("--chunk-size", type=int, default=1_000_000)
+    parser.add_argument("--chunk-size", type=int, default=config.runtime.chunk_size)
     parser.add_argument("--progress-every", type=int, default=5)
     parser.add_argument("--las-splat-radius", type=int, default=1)
     parser.add_argument("--las-color-gain", type=float, default=1.0)

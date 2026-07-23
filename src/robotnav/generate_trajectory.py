@@ -1,12 +1,12 @@
 import argparse
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
 
 from robotnav.navigation.astar_planner import astar, choose_auto_start_goal, nearest_free_cell
-from robotnav.navigation.config import DEFAULT_LAS, DEFAULT_OUTPUT_DIR, MapConfig
+from robotnav.navigation.config import load_map_config
 from robotnav.navigation.ground_estimation import estimate_floor_y
 from robotnav.navigation.las_io import iter_las_xyz, parse_las_header, sample_las_xyz
 from robotnav.navigation.occupancy_map import (
@@ -30,6 +30,8 @@ from robotnav.navigation.path_smoothing import (
     shortcut_path,
 )
 from robotnav.navigation.visualization import draw_path_debug
+
+BASE_CONFIG = load_map_config()
 
 
 def parse_xz(value):
@@ -55,49 +57,57 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Build a 2.5D map from LAS and generate one A* trajectory."
     )
-    parser.add_argument("--las", default=str(DEFAULT_LAS))
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--axis-transform", choices=["zup-to-yup", "none"], default="zup-to-yup")
+    parser.add_argument("--las", default=str(BASE_CONFIG.las_path))
+    parser.add_argument("--output-dir", default=str(BASE_CONFIG.output_dir))
     parser.add_argument(
-        "--floor-y", type=float, default=None, help="Override automatic floor_y estimation."
+        "--axis-transform", choices=["zup-to-yup", "none"], default=BASE_CONFIG.axis_transform
     )
-    parser.add_argument("--floor-search-y-min", type=float, default=0.0)
-    parser.add_argument("--floor-search-y-max", type=float, default=3.0)
+    parser.add_argument(
+        "--floor-y",
+        type=float,
+        default=BASE_CONFIG.floor_y_override,
+        help="Override automatic floor_y estimation.",
+    )
+    parser.add_argument("--floor-search-y-min", type=float, default=BASE_CONFIG.floor_search_y_min)
+    parser.add_argument("--floor-search-y-max", type=float, default=BASE_CONFIG.floor_search_y_max)
     parser.add_argument(
         "--roi-center-xz",
         type=parse_optional_xz,
-        default=(0.0, 0.0),
+        default=BASE_CONFIG.roi_center_xz,
         help='ROI center in X,Z. Use "none" for full-scene mapping.',
     )
     parser.add_argument(
         "--roi-size-xz",
         type=parse_optional_xz,
-        default=(12.0, 12.0),
+        default=BASE_CONFIG.roi_size_xz,
         help='ROI size in X,Z meters. Use "none" for full-scene mapping.',
     )
-    parser.add_argument("--resolution", type=float, default=0.08)
-    parser.add_argument("--robot-radius", type=float, default=0.25)
-    parser.add_argument("--robot-height", type=float, default=0.8)
-    parser.add_argument("--ground-margin", type=float, default=0.06)
-    parser.add_argument("--safety-margin", type=float, default=0.10)
-    parser.add_argument("--min-points-per-cell", type=int, default=2)
-    parser.add_argument("--start-xz", type=parse_xz, default=None)
-    parser.add_argument("--goal-xz", type=parse_xz, default=None)
-    parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--chunk-size", type=int, default=1_000_000)
+    parser.add_argument("--resolution", type=float, default=BASE_CONFIG.resolution_m)
+    parser.add_argument("--robot-radius", type=float, default=BASE_CONFIG.robot_radius_m)
+    parser.add_argument("--robot-height", type=float, default=BASE_CONFIG.robot_height_m)
+    parser.add_argument("--ground-margin", type=float, default=BASE_CONFIG.ground_margin_m)
+    parser.add_argument("--safety-margin", type=float, default=BASE_CONFIG.safety_margin_m)
+    parser.add_argument("--min-points-per-cell", type=int, default=BASE_CONFIG.min_points_per_cell)
+    parser.add_argument("--start-xz", type=parse_xz, default=BASE_CONFIG.start_xz)
+    parser.add_argument("--goal-xz", type=parse_xz, default=BASE_CONFIG.goal_xz)
+    parser.add_argument("--seed", type=int, default=BASE_CONFIG.random_seed)
+    parser.add_argument("--chunk-size", type=int, default=BASE_CONFIG.chunk_size)
     parser.add_argument(
         "--max-stream-points",
         type=int,
-        default=0,
+        default=BASE_CONFIG.max_stream_points,
         help="Debug limit for obstacle-map accumulation. 0 means use the full LAS.",
     )
-    parser.add_argument("--floor-sample-limit", type=int, default=1_200_000)
-    parser.add_argument("--min-start-goal-distance", type=float, default=3.0)
+    parser.add_argument("--floor-sample-limit", type=int, default=BASE_CONFIG.floor_sample_limit)
+    parser.add_argument(
+        "--min-start-goal-distance", type=float, default=BASE_CONFIG.min_start_goal_distance_m
+    )
     return parser.parse_args()
 
 
 def config_from_args(args):
-    return MapConfig(
+    return replace(
+        BASE_CONFIG,
         las_path=Path(args.las),
         output_dir=Path(args.output_dir),
         axis_transform=args.axis_transform,
