@@ -1,0 +1,15 @@
+[paths]
+ply = "data/input/try1_yup.ply"
+las = "data/input/try1-pointcloud-0706.las"
+output_dir = "outputs/render"
+
+[camera]
+width = 640
+height = 480
+fov = 50.0
+up_axis = "-y"
+
+[runtime]
+background = "black"
+chunk_size = 1000000
+seed = 7

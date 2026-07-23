@@ -1,12 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from robotnav.paths import DEFAULT_LAS, TRAJECTORY_OUTPUT_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
-
-DEFAULT_LAS = DATA_DIR / "test1-pointcloud-0704.las"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "trajectory_work" / "outputs"
+DEFAULT_OUTPUT_DIR = TRAJECTORY_OUTPUT_DIR
 
 
 @dataclass

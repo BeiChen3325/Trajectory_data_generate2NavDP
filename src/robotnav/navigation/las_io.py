@@ -111,4 +111,3 @@ def sample_las_xyz(path, max_points, chunk_size=1_000_000, axis_transform="zup-t
     if not chunks:
         return np.empty((0, 3), dtype=np.float64)
     return np.concatenate(chunks, axis=0)
-

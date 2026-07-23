@@ -1,3 +1,5 @@
+from itertools import pairwise
+
 import numpy as np
 
 
@@ -43,7 +45,7 @@ def densify_polyline(points_xz, samples_per_meter=8.0):
     if len(points_xz) <= 1:
         return points_xz
     result = [points_xz[0]]
-    for a, b in zip(points_xz[:-1], points_xz[1:]):
+    for a, b in pairwise(points_xz):
         length = float(np.linalg.norm(b - a))
         steps = max(int(np.ceil(length * samples_per_meter)), 1)
         for k in range(1, steps + 1):
@@ -57,7 +59,7 @@ def chaikin_smooth(points_xz, iterations=2):
         return points
     for _ in range(iterations):
         new_points = [points[0]]
-        for a, b in zip(points[:-1], points[1:]):
+        for a, b in pairwise(points):
             new_points.append(0.75 * a + 0.25 * b)
             new_points.append(0.25 * a + 0.75 * b)
         new_points.append(points[-1])
@@ -72,4 +74,3 @@ def path_collides_world(points_xz, obstacle_mask, world_to_grid_fn):
     if not np.all(valid):
         return True
     return bool(np.any(obstacle_mask[ij[:, 1], ij[:, 0]]))
-

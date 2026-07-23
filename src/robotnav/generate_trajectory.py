@@ -5,10 +5,11 @@ from pathlib import Path
 
 import numpy as np
 
-from astar_planner import astar, choose_auto_start_goal, nearest_free_cell
-from ground_estimation import estimate_floor_y
-from las_io import iter_las_xyz, parse_las_header, sample_las_xyz
-from occupancy_map import (
+from robotnav.navigation.astar_planner import astar, choose_auto_start_goal, nearest_free_cell
+from robotnav.navigation.config import DEFAULT_LAS, DEFAULT_OUTPUT_DIR, MapConfig
+from robotnav.navigation.ground_estimation import estimate_floor_y
+from robotnav.navigation.las_io import iter_las_xyz, parse_las_header, sample_las_xyz
+from robotnav.navigation.occupancy_map import (
     accumulate_ground_counts,
     accumulate_obstacle_counts,
     bounds_from_roi,
@@ -22,14 +23,13 @@ from occupancy_map import (
     save_map_debug,
     world_to_grid,
 )
-from path_smoothing import (
+from robotnav.navigation.path_smoothing import (
     chaikin_smooth,
     densify_polyline,
     path_collides_world,
     shortcut_path,
 )
-from trajectory_config import DEFAULT_LAS, DEFAULT_OUTPUT_DIR, MapConfig
-from visualization import draw_path_debug
+from robotnav.navigation.visualization import draw_path_debug
 
 
 def parse_xz(value):
@@ -52,11 +52,15 @@ def parse_optional_xz(value):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Build a 2.5D map from LAS and generate one A* trajectory.")
+    parser = argparse.ArgumentParser(
+        description="Build a 2.5D map from LAS and generate one A* trajectory."
+    )
     parser.add_argument("--las", default=str(DEFAULT_LAS))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--axis-transform", choices=["zup-to-yup", "none"], default="zup-to-yup")
-    parser.add_argument("--floor-y", type=float, default=None, help="Override automatic floor_y estimation.")
+    parser.add_argument(
+        "--floor-y", type=float, default=None, help="Override automatic floor_y estimation."
+    )
     parser.add_argument("--floor-search-y-min", type=float, default=0.0)
     parser.add_argument("--floor-search-y-max", type=float, default=3.0)
     parser.add_argument(
@@ -141,7 +145,9 @@ def main():
         )
         sample = filter_points_in_xz_bounds(sample, min_xz, max_xz)
         if sample.shape[0] == 0:
-            raise ValueError("No sampled points inside ROI. Increase --roi-size-xz or use --roi-center-xz none.")
+            raise ValueError(
+                "No sampled points inside ROI. Increase --roi-size-xz or use --roi-center-xz none."
+            )
         floor_y, floor_report = estimate_floor_y(
             sample,
             bins=cfg.floor_hist_bins,
@@ -165,7 +171,9 @@ def main():
     used_points = 0
     ground_points = 0
     seen_points = 0
-    for xyz in iter_las_xyz(cfg.las_path, chunk_size=cfg.chunk_size, axis_transform=cfg.axis_transform):
+    for xyz in iter_las_xyz(
+        cfg.las_path, chunk_size=cfg.chunk_size, axis_transform=cfg.axis_transform
+    ):
         if cfg.max_stream_points and seen_points >= cfg.max_stream_points:
             break
         if cfg.max_stream_points and seen_points + xyz.shape[0] > cfg.max_stream_points:
@@ -173,7 +181,9 @@ def main():
         seen_points += xyz.shape[0]
         xyz = filter_points_in_xz_bounds(xyz, min_xz, max_xz)
         if xyz.shape[0] == 0:
-            print(f"  streamed {seen_points}/{header['point_count']} points, no ROI points in chunk")
+            print(
+                f"  streamed {seen_points}/{header['point_count']} points, no ROI points in chunk"
+            )
             continue
         used_points += accumulate_obstacle_counts(
             counts=obstacle_counts,
@@ -195,7 +205,9 @@ def main():
             f"obstacle-height points={used_points}, ground-band points={ground_points}"
         )
 
-    print("Stage 3/7: cleaning, inflating obstacles, computing traversable ground, and distance transform")
+    print(
+        "Stage 3/7: cleaning, inflating obstacles, computing traversable ground, and distance transform"
+    )
     raw_ground = ground_counts >= cfg.min_ground_points_per_cell
     traversable_ground = clean_ground_mask(raw_ground, cfg)
     raw_obstacles = obstacle_counts >= cfg.min_points_per_cell
@@ -258,15 +270,21 @@ def main():
     print(f"  A* cells: {len(astar_path)}")
 
     print("Stage 5/7: shortcutting and smoothing path")
-    shortcut = shortcut_path(astar_path, planning_blocked, passes=cfg.shortcut_passes, seed=cfg.random_seed)
+    shortcut = shortcut_path(
+        astar_path, planning_blocked, passes=cfg.shortcut_passes, seed=cfg.random_seed
+    )
     shortcut_world = grid_to_world(shortcut, spec)
     dense = densify_polyline(shortcut_world, samples_per_meter=cfg.smooth_samples_per_meter)
     smooth = chaikin_smooth(dense, iterations=2)
-    smooth_collides = path_collides_world(smooth, planning_blocked, lambda pts: world_to_grid(pts, spec))
+    smooth_collides = path_collides_world(
+        smooth, planning_blocked, lambda pts: world_to_grid(pts, spec)
+    )
     if smooth_collides:
         print("  smoothed path collides after interpolation; falling back to dense shortcut path")
         smooth = dense
-        smooth_collides = path_collides_world(smooth, planning_blocked, lambda pts: world_to_grid(pts, spec))
+        smooth_collides = path_collides_world(
+            smooth, planning_blocked, lambda pts: world_to_grid(pts, spec)
+        )
 
     print("Stage 6/7: saving trajectory and debug images")
     astar_world = grid_to_world(astar_path, spec)
@@ -286,7 +304,9 @@ def main():
         "grid_goal_xy": goal.tolist(),
         "config": serialize_config(cfg),
     }
-    (cfg.output_dir / "trajectory.json").write_text(json.dumps(trajectory, indent=2), encoding="utf-8")
+    (cfg.output_dir / "trajectory.json").write_text(
+        json.dumps(trajectory, indent=2), encoding="utf-8"
+    )
     draw_path_debug(
         cfg.output_dir / "06_path_debug.png",
         cleaned,

@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 import torch
-from gsplat import rasterization
 
 try:
-    from render_one_view import (
+    from robotnav.rendering.render_one_view import (
+        _rasterize_compat,
         axis_to_vector,
         build_single_view,
         load_ply_to_torch,
@@ -24,12 +24,12 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data" / "input"
 
-DEFAULT_LAS = DATA_DIR / "test1-pointcloud-0704.las"
-DEFAULT_PLY = DATA_DIR / "test1_yup.ply"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "render_output2D" / "compare_las_ply_origin"
+DEFAULT_LAS = DATA_DIR / "try1-pointcloud-0706.las"
+DEFAULT_PLY = DATA_DIR / "try1_yup.ply"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "render" / "compare_las_ply"
 
 
 def parse_las_header(path):
@@ -179,7 +179,9 @@ def render_las_points(las_path, viewmat_np, K_np, args):
     visible_total = 0
 
     print(f"Reading LAS in chunks: {las_path}")
-    print(f"LAS points: {total}, format={header['point_format']}, record_len={header['point_record_length']}")
+    print(
+        f"LAS points: {total}, format={header['point_format']}, record_len={header['point_record_length']}"
+    )
 
     with open(las_path, "rb") as stream:
         stream.seek(header["offset_to_point_data"])
@@ -253,10 +255,12 @@ def render_ply_gaussians(ply_path, viewmat, K, args, device):
     )
 
     bg_value = 1.0 if args.background == "white" else 0.0
-    backgrounds = torch.tensor([[bg_value, bg_value, bg_value]], dtype=torch.float32, device=device)
+    backgrounds = torch.full(
+        (3,), bg_value, dtype=torch.float32, device=device
+    )  # packed=True expects one RGB vector
 
     with torch.no_grad():
-        renders, alphas, meta = rasterization(
+        renders, alphas, meta = _rasterize_compat(
             means=means,
             quats=quats,
             scales=scales,
@@ -398,7 +402,9 @@ def main():
 
     cv2.imwrite(str(ply_path), cv2.cvtColor(ply_rgb, cv2.COLOR_RGB2BGR))
     cv2.imwrite(str(las_path), cv2.cvtColor(las_rgb, cv2.COLOR_RGB2BGR))
-    cv2.imwrite(str(side_path), cv2.cvtColor(np.concatenate([ply_rgb, las_rgb], axis=1), cv2.COLOR_RGB2BGR))
+    cv2.imwrite(
+        str(side_path), cv2.cvtColor(np.concatenate([ply_rgb, las_rgb], axis=1), cv2.COLOR_RGB2BGR)
+    )
     cv2.imwrite(str(alpha_path), np.clip(ply_alpha * 255.0, 0, 255).astype(np.uint8))
     save_depth_preview(las_depth, depth_path)
 

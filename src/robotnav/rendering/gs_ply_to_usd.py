@@ -9,11 +9,9 @@ primvars for downstream tools that know how to reconstruct splats.
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 
 import numpy as np
-
 
 SH_C0 = 0.28209479177387814
 
@@ -265,17 +263,13 @@ def write_usda(
         stream.write("    customData = {\n")
         stream.write(f'        string sourcePly = "{usd_string(str(source_path))}"\n')
         stream.write(f"        int gaussianCount = {len(vertices)}\n")
-        stream.write(
-            '        string representation = "UsdGeom.Points with 3DGS custom primvars"\n'
-        )
+        stream.write('        string representation = "UsdGeom.Points with 3DGS custom primvars"\n')
         stream.write("    }\n")
         stream.write(")\n")
         stream.write("{\n")
         stream.write('    def Points "points"\n')
         stream.write("    {\n")
-        write_vec_array(
-            stream, "point3f[]", "points", positions, "(%.9g, %.9g, %.9g)"
-        )
+        write_vec_array(stream, "point3f[]", "points", positions, "(%.9g, %.9g, %.9g)")
         write_scalar_array(stream, "float[]", "widths", widths)
         write_vec_array(
             stream,
@@ -285,9 +279,7 @@ def write_usda(
             "(%.9g, %.9g, %.9g)",
             "vertex",
         )
-        write_scalar_array(
-            stream, "float[]", "primvars:displayOpacity", opacity, "vertex"
-        )
+        write_scalar_array(stream, "float[]", "primvars:displayOpacity", opacity, "vertex")
         write_vec_array(
             stream,
             "float3[]",
@@ -331,11 +323,7 @@ def write_usda(
 
         if args.include_sh_rest:
             rest_names = sorted(
-                (
-                    name
-                    for name in vertices.dtype.names
-                    if name.startswith("f_rest_")
-                ),
+                (name for name in vertices.dtype.names if name.startswith("f_rest_")),
                 key=lambda item: int(item.rsplit("_", 1)[1]),
             )
             for name in rest_names:

@@ -13,6 +13,18 @@ dist/
 
 # Virtual environments
 .venv/
+__pycache__/
+*.py[cod]
+
+data/input/*
+!data/input/.gitkeep
+outputs/
+*.las
+*.laz
+*.ply
+*.usd
+*.png
+*.jpg
 venv/
 env/
 ENV/
@@ -39,3 +51,6 @@ desktop.ini
 # Optional generated outputs. Uncomment these if they become large or reproducible.
 render_output2D/
 trajectory_work/outputs/
+
+# data file 
+data/

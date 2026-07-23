@@ -7,13 +7,12 @@ from pathlib import Path
 import numpy as np
 from plyfile import PlyData
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data" / "input"
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
-
-DEFAULT_LAS = DATA_DIR / "test1-pointcloud-0704.las"
-DEFAULT_PLY = DATA_DIR / "test1_yup.ply"
-DEFAULT_TXT = PROJECT_ROOT / "render_output2D" / "point_sample_report.txt"
+DEFAULT_LAS = DATA_DIR / "try1-pointcloud-0706.las"
+DEFAULT_PLY = DATA_DIR / "try1_yup.ply"
+DEFAULT_TXT = PROJECT_ROOT / "outputs" / "render" / "point_sample_report.txt"
 SH_C0 = 0.28209479177387814
 
 

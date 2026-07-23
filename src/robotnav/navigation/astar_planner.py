@@ -4,7 +4,6 @@ import math
 import cv2
 import numpy as np
 
-
 NEIGHBORS_8 = [
     (-1, -1, math.sqrt(2.0)),
     (0, -1, 1.0),
@@ -35,7 +34,7 @@ def nearest_free_cell(cell, free_mask, max_radius=80):
         for xx, yy in candidates:
             if free_mask[yy, xx]:
                 d2 = (xx - x) ** 2 + (yy - y) ** 2
-                if best is None or d2 < best_d2:
+                if best is None or best_d2 is None or d2 < best_d2:
                     best = np.array([xx, yy], dtype=np.int64)
                     best_d2 = d2
         if best is not None:
@@ -52,7 +51,9 @@ def choose_auto_start_goal(free_mask, distance_m, spec, min_distance_m, seed=7):
         raise ValueError("Not enough free cells to choose start and goal.")
 
     rng = np.random.default_rng(seed)
-    scored = candidates[np.argsort(distance_m[candidates[:, 0], candidates[:, 1]])[-min(5000, len(candidates)) :]]
+    scored = candidates[
+        np.argsort(distance_m[candidates[:, 0], candidates[:, 1]])[-min(5000, len(candidates)) :]
+    ]
     first = scored[rng.integers(0, scored.shape[0])]
     first_xy = np.array([first[1], first[0]], dtype=np.float64)
     min_cells = min_distance_m / spec["resolution"]
@@ -62,7 +63,9 @@ def choose_auto_start_goal(free_mask, distance_m, spec, min_distance_m, seed=7):
         diffs = candidates[:, [1, 0]].astype(np.float64) - first_xy
         far = candidates[[int(np.argmax(np.linalg.norm(diffs, axis=1)))]]
     second = far[np.argmax(distance_m[far[:, 0], far[:, 1]])]
-    return np.array([first[1], first[0]], dtype=np.int64), np.array([second[1], second[0]], dtype=np.int64)
+    return np.array([first[1], first[0]], dtype=np.int64), np.array(
+        [second[1], second[0]], dtype=np.int64
+    )
 
 
 def largest_free_component(free_mask):
@@ -76,7 +79,15 @@ def largest_free_component(free_mask):
     return labels == label
 
 
-def astar(start_xy, goal_xy, obstacle_mask, distance_m=None, resolution=0.08, obstacle_cost_weight=0.8, obstacle_cost_power=1.5):
+def astar(
+    start_xy,
+    goal_xy,
+    obstacle_mask,
+    distance_m=None,
+    resolution=0.08,
+    obstacle_cost_weight=0.8,
+    obstacle_cost_power=1.5,
+):
     h, w = obstacle_mask.shape
     free = ~obstacle_mask
     start = tuple(map(int, start_xy))

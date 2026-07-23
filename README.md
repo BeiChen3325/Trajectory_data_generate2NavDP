@@ -1,77 +1,54 @@
-# ZJUgive_DataEngine_For_RobotNav
+# ZJUgive DataEngine for RobotNav
 
-## Environment Setup
+实验性点云、3D Gaussian 渲染和机器人导航轨迹工具集。
 
-Use conda to create an isolated Python environment.
+## 环境
 
-The original development environment used Python `3.10.20`. The recommended environment name is `robotnav`.
+项目使用 Python 3.10+，GPU 功能需要与本机 CUDA 匹配的 PyTorch 和 gsplat。
 
-### Windows + Python 3.10 + CUDA 12.1
-
-Create and activate the conda environment:
-
-```powershell
-conda create -n robotnav python=3.10
-conda activate robotnav
+```bash
+uv sync
+uv sync --extra gpu
+uv run robotnav-env-check
 ```
 
-Install PyTorch, torchvision, and gsplat:
+环境检查是运行渲染和轨迹生成前的第一步，会检查 Python 依赖、CUDA、gsplat 后端和项目模块。
 
-```powershell
-python -m pip install torch==2.1.2+cu121 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
-python -m pip install gsplat==1.5.2+pt21cu121 --index-url https://docs.gsplat.studio/whl
-```
+## 数据和输出
 
-Install the remaining Python dependencies:
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-## Data Files
-
-The default scripts expect LAS/PLY files exported from the LiXingYun platform to be placed next to this repository, under:
-
-```python
-DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
-```
-
-Recommended layout:
+输入文件放在：
 
 ```text
-xxx/
-  ZJUgive_DataEngine_For_RobotNav/
-  MindCloudXAI_output/
-    test1-pointcloud-0704.las
-    test1_yup.ply
+data/input/
+├── try1-pointcloud-0706.las
+└── try1_yup.ply
 ```
 
-With this layout, the default input paths resolve automatically. Render outputs are written under `render_output2D/`, and trajectory outputs are written under `trajectory_work/outputs/`.
+运行结果统一写入：
 
-This environment pins PyTorch `2.1.2+cu121` and gsplat `1.5.2+pt21cu121` for Windows, Python 3.10, and CUDA 12.1.
-
-`requirements.txt` intentionally excludes `torch`, `torchvision`, and `gsplat` because those packages are tightly coupled to the operating system, Python version, PyTorch version, and CUDA version.
-
-### If Online Install Fails
-
-The gsplat wheel is downloaded from a GitHub-hosted release/index. On networks where GitHub access is unstable, download the wheel manually in a browser and install it from the local file before installing the remaining requirements.
-
-Relevant sources:
-
-- PyTorch CUDA 12.1 wheel index: https://download.pytorch.org/whl/cu121/torch/
-- PyTorch wheel used by this environment: https://download.pytorch.org/whl/cu121/torch-2.1.2%2Bcu121-cp310-cp310-win_amd64.whl
-- gsplat wheel index: https://docs.gsplat.studio/whl/gsplat/
-- gsplat wheel used by this environment: https://github.com/nerfstudio-project/gsplat/releases/download/v1.5.2/gsplat-1.5.2%2Bpt21cu121-cp310-cp310-win_amd64.whl
-
-Example local wheel install:
-
-```powershell
-python -m pip install .\wheels\gsplat-1.5.2+pt21cu121-cp310-cp310-win_amd64.whl
-python -m pip install -r requirements.txt
+```text
+outputs/render/
+outputs/trajectory/
 ```
 
-The PyTorch wheel is about 2.5 GB, so it should not be committed to this repository. The gsplat wheel is much smaller and can be kept locally under a `wheels/` directory if offline deployment is needed.
+大体积点云和生成结果不提交到 Git。
 
-### Other Platforms
+## 常用命令
 
-If you are using a different operating system, Python version, PyTorch version, or CUDA version, install matching versions of `torch`, `torchvision`, and `gsplat` first, then install the remaining packages with `python -m pip install -r requirements.txt`.
+```bash
+uv run robotnav-render
+uv run robotnav-compare
+uv run robotnav-trajectory
+```
+
+也可以直接传入命令行参数覆盖默认参数。命令行参数优先于 TOML 配置和代码默认值。
+
+## 静态检查
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+```
+
+源码位于 `src/robotnav/`，渲染代码位于 `rendering/`，导航和轨迹代码位于 `navigation/`。

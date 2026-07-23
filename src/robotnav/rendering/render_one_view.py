@@ -10,14 +10,30 @@ import torch.nn.functional as F
 from gsplat import rasterization
 from plyfile import PlyData
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data" / "input"
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_ROOT.parent / "MindCloudXAI_output"
-
-DEFAULT_PLY = DATA_DIR / "test1_yup.ply"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "render_output2D"
+DEFAULT_PLY = DATA_DIR / "try1_yup.ply"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs" / "render"
 
 SH_C0 = 0.28209479177387814
+
+
+def _rasterize_compat(**kwargs):
+    """Call gsplat with the current background shape, then support older APIs."""
+    backgrounds = kwargs.get("backgrounds")
+    try:
+        return rasterization(**kwargs)
+    except AssertionError as exc:
+        if backgrounds is None or "backgrounds.shape" not in str(exc):
+            raise
+        fallback = dict(kwargs)
+        if backgrounds.ndim == 1:
+            camera_count = kwargs["viewmats"].shape[-3]
+            fallback["backgrounds"] = backgrounds.unsqueeze(0).expand(camera_count, -1)
+        else:
+            fallback["backgrounds"] = backgrounds[0]
+        return rasterization(**fallback)
 
 
 def _sorted_property_names(vertex, prefix):
@@ -67,9 +83,9 @@ def load_ply_to_torch(
     scales_np = np.stack([vertex[name] for name in scale_names], axis=-1).astype(np.float32)
     quats_np = np.stack([vertex[name] for name in rot_names], axis=-1).astype(np.float32)
     opacity_np = np.asarray(vertex["opacity"], dtype=np.float32)
-    f_dc = np.stack(
-        [vertex["f_dc_0"], vertex["f_dc_1"], vertex["f_dc_2"]], axis=-1
-    ).astype(np.float32)
+    f_dc = np.stack([vertex["f_dc_0"], vertex["f_dc_1"], vertex["f_dc_2"]], axis=-1).astype(
+        np.float32
+    )
     f_rest = None
     if rest_names:
         f_rest = np.stack([vertex[name] for name in rest_names], axis=-1).astype(np.float32)
@@ -218,11 +234,7 @@ def format_coord_token(value, digits=3):
 
 def format_vec_token(vec, prefix):
     x, y, z = vec
-    return (
-        f"{prefix}_x{format_coord_token(x)}"
-        f"_y{format_coord_token(y)}"
-        f"_z{format_coord_token(z)}"
-    )
+    return f"{prefix}_x{format_coord_token(x)}_y{format_coord_token(y)}_z{format_coord_token(z)}"
 
 
 def find_dense_focus(means, opacities, grid_size=80, neighborhood=1, min_radius=0.15):
@@ -427,7 +439,7 @@ def render_batch():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    means, scales, quats, opacities, colors, center, radius, sh_degree = load_ply_to_torch(
+    means, scales, quats, opacities, colors, center, _radius, sh_degree = load_ply_to_torch(
         ply_path,
         device=device,
         unit_scale=args.unit_scale,
@@ -438,9 +450,9 @@ def render_batch():
     K = make_intrinsics(args, device)
     up = axis_to_vector(args.up_axis, device)
     bg_value = 1.0 if args.background == "white" else 0.0
-    background = torch.tensor(
-        [[bg_value, bg_value, bg_value]], dtype=torch.float32, device=device
-    )
+    background = torch.full(
+        (3,), bg_value, dtype=torch.float32, device=device
+    )  # packed=True expects one RGB vector
 
     viewmats = []
     backgrounds = []
@@ -452,7 +464,7 @@ def render_batch():
     if args.mode == "single":
         name, eye, target, viewmat = build_single_view(args, device, up)
         viewmats.append(viewmat)
-        backgrounds.append(background[0])
+        backgrounds.append(background)
         names.append((name, eye.detach().cpu().numpy(), target.detach().cpu().numpy()))
     else:
         view_specs = make_view_specs()
@@ -485,7 +497,7 @@ def render_batch():
                 eye = base_eye
                 target = eye + direction_tensor * args.look_distance
             viewmats.append(look_at_world_to_camera(eye, target, up))
-            backgrounds.append(background[0])
+            backgrounds.append(background)
             names.append(
                 (
                     name,
@@ -496,7 +508,7 @@ def render_batch():
 
     viewmats = torch.stack(viewmats, dim=0)
     Ks = K.unsqueeze(0).repeat(viewmats.shape[0], 1, 1)
-    backgrounds = torch.stack(backgrounds, dim=0)
+    backgrounds = background
 
     print(f"Loaded gaussians: {means.shape[0]}")
     print(f"Scene center: {center.detach().cpu().numpy()}")
@@ -515,7 +527,7 @@ def render_batch():
     print(f"Rendering {len(names)} views with gsplat.rasterization...")
 
     with torch.no_grad():
-        renders, alphas, meta = rasterization(
+        renders, alphas, meta = _rasterize_compat(
             means=means,
             quats=quats,
             scales=scales,
@@ -548,7 +560,9 @@ def render_batch():
     manifest_lines = []
     manifest_lines.append(f"ply: {ply_path}")
     manifest_lines.append(f"mode: {args.mode}")
-    manifest_lines.append(f"scene_center: {format_vec_token(center.detach().cpu().numpy(), 'scene')}")
+    manifest_lines.append(
+        f"scene_center: {format_vec_token(center.detach().cpu().numpy(), 'scene')}"
+    )
     if args.mode == "orbit":
         manifest_lines.append(
             f"focus_target: {format_vec_token(base_target.detach().cpu().numpy(), 'target')}"

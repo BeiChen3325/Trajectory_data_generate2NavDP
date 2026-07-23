@@ -15,7 +15,17 @@ def colorize_planning_map(cleaned, inflated, blocked, distance_m):
     return canvas
 
 
-def draw_path_debug(output_path, cleaned, inflated, blocked, distance_m, astar_path_xy, shortcut_xy, smooth_xy=None, world_to_grid_fn=None):
+def draw_path_debug(
+    output_path,
+    cleaned,
+    inflated,
+    blocked,
+    distance_m,
+    astar_path_xy,
+    shortcut_xy,
+    smooth_xy=None,
+    world_to_grid_fn=None,
+):
     canvas = colorize_planning_map(cleaned, inflated, blocked, distance_m)
     if astar_path_xy is not None and len(astar_path_xy) > 1:
         draw_grid_polyline(canvas, astar_path_xy, (255, 180, 60), 1)
@@ -30,7 +40,11 @@ def draw_path_debug(output_path, cleaned, inflated, blocked, distance_m, astar_p
     canvas = cv2.flip(canvas, 0)
     scale = max(1, min(8, 900 // max(canvas.shape[0], canvas.shape[1], 1)))
     if scale > 1:
-        canvas = cv2.resize(canvas, (canvas.shape[1] * scale, canvas.shape[0] * scale), interpolation=cv2.INTER_NEAREST)
+        canvas = cv2.resize(
+            canvas,
+            (canvas.shape[1] * scale, canvas.shape[0] * scale),
+            interpolation=cv2.INTER_NEAREST,
+        )
     cv2.imwrite(str(Path(output_path)), canvas)
 
 

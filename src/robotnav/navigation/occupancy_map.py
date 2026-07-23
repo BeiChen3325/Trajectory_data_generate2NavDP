@@ -83,10 +83,7 @@ def accumulate_obstacle_counts(counts, xyz_yup, floor_y, robot_height, ground_ma
     xz = xyz_yup[mask][:, [0, 2]]
     ij = world_to_grid(xz, spec)
     valid = (
-        (ij[:, 0] >= 0)
-        & (ij[:, 0] < spec["width"])
-        & (ij[:, 1] >= 0)
-        & (ij[:, 1] < spec["height"])
+        (ij[:, 0] >= 0) & (ij[:, 0] < spec["width"]) & (ij[:, 1] >= 0) & (ij[:, 1] < spec["height"])
     )
     if not np.any(valid):
         return 0
@@ -103,10 +100,7 @@ def accumulate_ground_counts(counts, xyz_yup, floor_y, ground_band, spec):
     xz = xyz_yup[mask][:, [0, 2]]
     ij = world_to_grid(xz, spec)
     valid = (
-        (ij[:, 0] >= 0)
-        & (ij[:, 0] < spec["width"])
-        & (ij[:, 1] >= 0)
-        & (ij[:, 1] < spec["height"])
+        (ij[:, 0] >= 0) & (ij[:, 0] < spec["width"]) & (ij[:, 1] >= 0) & (ij[:, 1] < spec["height"])
     )
     if not np.any(valid):
         return 0
@@ -118,7 +112,9 @@ def accumulate_ground_counts(counts, xyz_yup, floor_y, ground_band, spec):
 def remove_small_components(binary, min_cells):
     if min_cells <= 1:
         return binary
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary.astype(np.uint8), connectivity=8)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        binary.astype(np.uint8), connectivity=8
+    )
     cleaned = np.zeros_like(binary, dtype=bool)
     for label in range(1, num_labels):
         if stats[label, cv2.CC_STAT_AREA] >= min_cells:
@@ -138,7 +134,9 @@ def clean_and_inflate_obstacles(raw_obstacles, config):
         obstacles = cv2.morphologyEx(obstacles, cv2.MORPH_CLOSE, kernel)
 
     cleaned = remove_small_components(obstacles > 0, config.min_obstacle_component_cells)
-    inflate_cells = int(np.ceil((config.robot_radius_m + config.safety_margin_m) / config.resolution_m))
+    inflate_cells = int(
+        np.ceil((config.robot_radius_m + config.safety_margin_m) / config.resolution_m)
+    )
     if inflate_cells > 0:
         kernel = cv2.getStructuringElement(
             cv2.MORPH_ELLIPSE, (2 * inflate_cells + 1, 2 * inflate_cells + 1)
@@ -186,14 +184,23 @@ def save_map_debug(
     if positive.size:
         hi = np.percentile(positive, 99.0)
         hi = max(float(hi), 1.0)
-        count_img = np.clip(np.log1p(obstacle_counts) / np.log1p(hi) * 255.0, 0, 255).astype(np.uint8)
+        count_img = np.clip(np.log1p(obstacle_counts) / np.log1p(hi) * 255.0, 0, 255).astype(
+            np.uint8
+        )
     write_debug_image(output_dir / "01_obstacle_point_counts.png", count_img)
     write_debug_image(output_dir / "02_raw_obstacles.png", raw_obstacles.astype(np.uint8) * 255)
     write_debug_image(output_dir / "03_cleaned_obstacles.png", cleaned.astype(np.uint8) * 255)
-    write_debug_image(output_dir / "04_planning_obstacles_inflated.png", inflated.astype(np.uint8) * 255)
+    write_debug_image(
+        output_dir / "04_planning_obstacles_inflated.png", inflated.astype(np.uint8) * 255
+    )
     write_debug_image(output_dir / "05_raw_ground.png", raw_ground.astype(np.uint8) * 255)
-    write_debug_image(output_dir / "06_traversable_ground.png", traversable_ground.astype(np.uint8) * 255)
-    write_debug_image(output_dir / "07_planning_blocked_unknown_or_obstacle.png", planning_blocked.astype(np.uint8) * 255)
+    write_debug_image(
+        output_dir / "06_traversable_ground.png", traversable_ground.astype(np.uint8) * 255
+    )
+    write_debug_image(
+        output_dir / "07_planning_blocked_unknown_or_obstacle.png",
+        planning_blocked.astype(np.uint8) * 255,
+    )
 
     dist_vis = np.clip(distance_m / max(float(np.percentile(distance_m, 98.0)), 0.1), 0.0, 1.0)
     dist_vis = (dist_vis * 255.0).astype(np.uint8)
@@ -214,5 +221,7 @@ def save_map_debug(
 def write_debug_image(path, image):
     scale = max(1, min(8, 900 // max(image.shape[0], image.shape[1], 1)))
     if scale > 1:
-        image = cv2.resize(image, (image.shape[1] * scale, image.shape[0] * scale), interpolation=cv2.INTER_NEAREST)
+        image = cv2.resize(
+            image, (image.shape[1] * scale, image.shape[0] * scale), interpolation=cv2.INTER_NEAREST
+        )
     cv2.imwrite(str(path), image)

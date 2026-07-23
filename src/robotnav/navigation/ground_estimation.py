@@ -99,8 +99,16 @@ def save_floor_histogram_debug(edges, counts, coverage, floor_bin, output_dir):
         x1 = pad + int((i + 1) / len(counts) * plot_w)
         bar_h = int(counts[i] / max_count * plot_h)
         cov_h = int(coverage[i] / max_cov * plot_h)
-        cv2.rectangle(canvas, (x0, height - pad - bar_h), (max(x1, x0 + 1), height - pad), (190, 210, 235), -1)
-        cv2.line(canvas, (x0, height - pad - cov_h), (max(x1, x0 + 1), height - pad - cov_h), (50, 120, 40), 2)
+        cv2.rectangle(
+            canvas, (x0, height - pad - bar_h), (max(x1, x0 + 1), height - pad), (190, 210, 235), -1
+        )
+        cv2.line(
+            canvas,
+            (x0, height - pad - cov_h),
+            (max(x1, x0 + 1), height - pad - cov_h),
+            (50, 120, 40),
+            2,
+        )
 
     fx = pad + int((floor_bin + 0.5) / len(counts) * plot_w)
     cv2.line(canvas, (fx, pad), (fx, height - pad), (0, 0, 255), 2)

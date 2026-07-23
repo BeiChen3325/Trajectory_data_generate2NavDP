@@ -1,0 +1,61 @@
+[project]
+name = "robotnav"
+version = "0.1.0"
+description = "Data engine and navigation utilities for RobotNav"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "plyfile",
+    "tomli>=2.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "torch>=2.1",
+    "gsplat>=1.5",
+    "packaging",
+]
+dev = [
+    "ipython",
+    "pytest",
+    "ruff",
+    "ty",
+]
+
+[project.scripts]
+robotnav-env-check = "robotnav.env_check:main"
+robotnav-render = "robotnav.rendering.render_one_view:main"
+robotnav-compare = "robotnav.rendering.compare_render:main"
+robotnav-trajectory = "robotnav.generate_trajectory:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robotnav"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = [".venv", "outputs", "data", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ty.environment]
+python-version = "3.10"
+root = ["src"]
+
+[tool.ty.src]
+include = ["src"]
+exclude = ["outputs", "data", "__pycache__", "src/robotnav/rendering", "src/robotnav/env_check.py"]
