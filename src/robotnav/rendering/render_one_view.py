@@ -21,7 +21,7 @@ def _rasterize_compat(**kwargs):
     try:
         return rasterization(**kwargs)
     except AssertionError as exc:
-        if backgrounds is None or "backgrounds.shape" not in str(exc):
+        if backgrounds is None:
             raise
         fallback = dict(kwargs)
         if backgrounds.ndim == 1:
@@ -29,7 +29,10 @@ def _rasterize_compat(**kwargs):
             fallback["backgrounds"] = backgrounds.unsqueeze(0).expand(camera_count, -1)
         else:
             fallback["backgrounds"] = backgrounds[0]
-        return rasterization(**fallback)
+        try:
+            return rasterization(**fallback)
+        except AssertionError:
+            raise exc
 
 
 def _sorted_property_names(vertex, prefix):
