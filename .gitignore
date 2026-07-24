@@ -17,6 +17,7 @@ __pycache__/
 *.py[cod]
 
 data/input/*
+data/target/*
 !data/input/.gitkeep
 outputs/
 *.las

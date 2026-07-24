@@ -34,41 +34,46 @@ uv run robotnav-env-check
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
+uv run pytest -q
 ```
+## 数据集构建与语义点云状态（2026-07-24）
 
-## 数据集构建进展（2026-07-24）
+面向 `docs/target_data.md` 的首版模块化流水线已经实现。数据集配置入口为
+`configs/dataset_build.toml`，三个数据集阶段只通过固定中间文件交换数据：
 
-面向 `docs/target_data.md` 的首版模块化流水线已经实现，配置入口为
-`configs/dataset_build.toml`。新增代码位于 `src/robotnav/dataset/`，三个阶段只通过固定
-中间文件交换数据，禁止绕过文件契约直接传递阶段内部对象：
+1. `robotnav-trajectory-to-camera`：将 `trajectory.json` 转换为 contract version 1 的
+   `camera_trajectory.npz/json`；
+2. `robotnav-render-trajectory`：生成 RGB、uint16 metric Depth 和 `render_manifest.json`；
+3. `robotnav-package-dataset`：校验并打包相机轨迹、渲染产物和语义点云。
 
-1. `robotnav-trajectory-to-camera`：读取现有 `trajectory.json`，生成 contract version 1
-   的 `camera_trajectory.npz` 和 `camera_trajectory.json`；
-2. `robotnav-render-trajectory`：读取相机轨迹文件和 `render.toml`，生成 RGB、uint16
-   metric Depth 与 `render_manifest.json`；
-3. `robotnav-package-dataset`：读取相机轨迹、渲染产物和已有语义点云，写 Parquet、
-   `episodes_stats.jsonl`、`pointcloud.ply` 和 `run_manifest.json`。
+`robotnav-trajectory` 现在同时生成 `trajectory.json`、`occupancy_map.npz`、
+`pointcloud.ply` 和 `pointcloud_report.json`。`pointcloud.ply` 是轨迹阶段的内生产物，默认位于
+`outputs/trajectory/`；不得重新视为 `data/input/` 中的外生文件。打包配置只引用并复制它。
 
-另外提供：
+## 障碍模型约定
 
-- `robotnav-build-dataset`：按独立子进程依次运行三个阶段，不省略中间文件；
-- `robotnav-validate-dataset`：单独验证已打包的目标 scene；
-- `tests/test_dataset_build.py`：覆盖配置、重复路径点、位姿互逆和目标目录打包；
-- `pandas`、`pyarrow` 已加入正式依赖并更新 `uv.lock`。
+轨迹规划与语义点云共享坐标变换、地面估计和未膨胀的 `cleaned_obstacles`，但派生语义必须
+保持隔离：
 
-当前已使用仓库中的真实 `trajectory.json` 和 3DGS PLY 完成 GPU smoke test：生成 124 组
-`640×480` RGB/Depth，文件位于 `outputs/dataset_build/`。新增范围 Ruff/format、全部测试
-和 `ty check` 均通过。
+- 规划分支只统计 `ground_margin_m` 到 `robot_height_m` 的碰撞高度带，并使用机器人半径、
+  安全边距和未知区生成 `planning_blocked`；
+- 语义点云分支保留 `cleaned_obstacles` 足迹内、地面间隙以上的完整高度 LAS 表面；不得使用
+  `inflated_obstacles` 或把未知区伪装成物理刚体；
+- 体素降采样必须保留距体素中心最近的真实 LAS 代表点，禁止把人工体素中心写入 PLY；
+- 默认障碍色为 `(0, 0, 128)`，上下文色为 `(192, 192, 192)`；障碍体素 2 cm，上下文体素
+  5 cm，并默认包含上下文；
+- 当前内部坐标为 Y-up 表达，但物理向下是 `+Y`，离地高度统一计算为
+  `floor_y - y`。不得对语义点云单独居中、归一化或缩放。
 
-## 数据集构建当前缺失与下一步
+详细设计和验收规则见 `docs/pointcloud_plan.md`。
 
-- 缺少默认配置指定的 `data/input/pointcloud.ply`。它必须是 Open3D 可读的标准彩色点云，
-  且障碍点颜色与 `(0,0,0.5)` 的距离小于 `0.05`。该文件属于可替换的上游语义点云产物，
-  当前流水线只校验和复制，不从 LAS 临时生成。
-- 因上述语义点云尚未提供，真实最终目录
-  `data/target/robotnav/scene-000/` 尚未执行打包；合成输入下的完整打包测试已经通过。
-- 提供语义点云后，先运行
-  `uv run robotnav-package-dataset --config dataset_build.toml`；如需从第一阶段重跑全部流程，
-  使用 `uv run robotnav-build-dataset --config dataset_build.toml --render-config render.toml`。
+## 当前验证结果与下一步
+
+- 真实 15,439,148 点 LAS 已完成端到端轨迹与点云生成：轨迹 124 点且碰撞复检为 false；
+- 完整高度障碍候选为 3,326,094 点，输出 219,649 个障碍代表点和 90,244 个上下文代表点；
+- 最终 PLY 共 309,893 点、约 4.5 MB，Y 坐标有 2,853 个不同值，并已通过语义点云校验；
+- 当前单元测试 8 个全部通过，`ty check` 与本次相关 Ruff 检查通过；
+- 既有 RGB-D manifest 绑定的是旧 `trajectory.json` 哈希。正式打包前必须重新运行轨迹到相机、
+  RGB-D 渲染和打包阶段，不能复用旧 manifest 绕过哈希完整性检查；
 - 全仓 `uv run ruff check .` 仍会命中既有的
-  `src/robotnav/rendering/render_one_view.py:35` `B904` 告警；该问题不在本次新增模块中。
+  `src/robotnav/rendering/render_one_view.py:35` `B904` 告警。

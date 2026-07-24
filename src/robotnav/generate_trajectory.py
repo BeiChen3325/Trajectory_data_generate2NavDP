@@ -29,6 +29,11 @@ from robotnav.navigation.path_smoothing import (
     path_collides_world,
     shortcut_path,
 )
+from robotnav.navigation.pointcloud_export import export_las_pointcloud
+from robotnav.navigation.scene_obstacles import (
+    SceneObstacleModel,
+    save_scene_obstacle_model,
+)
 from robotnav.navigation.visualization import draw_path_debug
 
 BASE_CONFIG = load_map_config()
@@ -137,7 +142,7 @@ def main():
     cfg = config_from_args(args)
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Stage 1/7: reading LAS header, resolving ROI, and sampling points for floor estimation")
+    print("Stage 1/8: reading LAS header, resolving ROI, and sampling points for floor estimation")
     header = parse_las_header(cfg.las_path)
     if cfg.roi_center_xz is not None and cfg.roi_size_xz is not None:
         min_xz, max_xz = bounds_from_roi(cfg.roi_center_xz, cfg.roi_size_xz, padding=0.5)
@@ -174,7 +179,7 @@ def main():
         )
     print(f"  estimated floor_y={floor_y:.4f}")
 
-    print("Stage 2/7: building X-Z grid and accumulating obstacle-height points")
+    print("Stage 2/8: building X-Z grid and accumulating obstacle-height points")
     spec = make_grid_spec(min_xz, max_xz, cfg.resolution_m)
     obstacle_counts = np.zeros((spec["height"], spec["width"]), dtype=np.uint32)
     ground_counts = np.zeros((spec["height"], spec["width"]), dtype=np.uint32)
@@ -216,7 +221,7 @@ def main():
         )
 
     print(
-        "Stage 3/7: cleaning, inflating obstacles, computing traversable ground, and distance transform"
+        "Stage 3/8: cleaning, inflating obstacles, computing traversable ground, and distance transform"
     )
     raw_ground = ground_counts >= cfg.min_ground_points_per_cell
     traversable_ground = clean_ground_mask(raw_ground, cfg)
@@ -225,6 +230,24 @@ def main():
     planning_blocked = inflated | (~traversable_ground)
     raw_distance_m = distance_transform_meters(cleaned, cfg.resolution_m)
     planning_distance_m = distance_transform_meters(planning_blocked, cfg.resolution_m)
+    scene_obstacles = SceneObstacleModel(
+        obstacle_counts=obstacle_counts,
+        ground_counts=ground_counts,
+        raw_ground=raw_ground,
+        traversable_ground=traversable_ground,
+        raw_obstacles=raw_obstacles,
+        cleaned_obstacles=cleaned,
+        inflated_obstacles=inflated,
+        planning_blocked=planning_blocked,
+        raw_distance_m=raw_distance_m,
+        planning_distance_m=planning_distance_m,
+        origin_xz=np.asarray(spec["origin_xz"], dtype=np.float64),
+        max_xz=np.asarray(spec["max_xz"], dtype=np.float64),
+        resolution_m=cfg.resolution_m,
+        floor_y=float(floor_y),
+        axis_transform=cfg.axis_transform,
+    )
+    save_scene_obstacle_model(cfg.output_dir / "occupancy_map.npz", scene_obstacles)
     save_map_debug(
         cfg.output_dir,
         obstacle_counts,
@@ -247,7 +270,7 @@ def main():
         },
     )
 
-    print("Stage 4/7: selecting start/goal and running A*")
+    print("Stage 4/8: selecting start/goal and running A*")
     free = ~planning_blocked
     if cfg.start_xz is not None:
         start = nearest_free_cell(world_to_grid(cfg.start_xz, spec), free)
@@ -279,7 +302,7 @@ def main():
     )
     print(f"  A* cells: {len(astar_path)}")
 
-    print("Stage 5/7: shortcutting and smoothing path")
+    print("Stage 5/8: shortcutting and smoothing path")
     shortcut = shortcut_path(
         astar_path, planning_blocked, passes=cfg.shortcut_passes, seed=cfg.random_seed
     )
@@ -296,7 +319,7 @@ def main():
             smooth, planning_blocked, lambda pts: world_to_grid(pts, spec)
         )
 
-    print("Stage 6/7: saving trajectory and debug images")
+    print("Stage 6/8: saving trajectory and debug images")
     astar_world = grid_to_world(astar_path, spec)
     start_world = grid_to_world(start, spec)
     goal_world = grid_to_world(goal, spec)
@@ -329,7 +352,27 @@ def main():
         world_to_grid_fn=lambda pts: world_to_grid(pts, spec),
     )
 
-    print("Stage 7/7: done")
+    print("Stage 7/8: exporting target-compatible physical-obstacle point cloud")
+    if cfg.pointcloud.enabled:
+        pointcloud_report = export_las_pointcloud(
+            cfg.las_path,
+            cfg.output_dir,
+            scene_obstacles,
+            cfg.pointcloud,
+            ground_margin_m=cfg.ground_margin_m,
+            chunk_size=cfg.chunk_size,
+            max_stream_points=cfg.max_stream_points,
+        )
+        obstacle_points = pointcloud_report["counts"]["obstacle_representative_points"]
+        context_points = pointcloud_report["counts"]["context_representative_points"]
+        print(
+            f"  pointcloud representative points: obstacles={obstacle_points}, "
+            f"context={context_points}"
+        )
+    else:
+        print("  pointcloud export disabled by configuration")
+
+    print("Stage 8/8: done")
     print(f"  output_dir={cfg.output_dir}")
     print(f"  trajectory points={len(smooth)}, collision={smooth_collides}")
 

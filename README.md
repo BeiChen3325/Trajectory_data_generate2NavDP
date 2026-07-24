@@ -45,7 +45,7 @@ uv run robotnav-trajectory
 
 ## 目标数据集构建
 
-`configs/dataset_build.toml` 配置既有轨迹、语义点云、工作目录和目标 scene。
+`configs/dataset_build.toml` 配置轨迹阶段生成的轨迹与障碍点云、工作目录和目标 scene。
 三个阶段通过版本化文件交付，可独立执行：
 
 ```bash
@@ -60,7 +60,7 @@ uv run robotnav-package-dataset --config dataset_build.toml
 uv run robotnav-build-dataset --config dataset_build.toml --render-config render.toml
 ```
 
-打包阶段要求 `dataset_build.toml` 指定的标准彩色 `pointcloud.ply` 已存在，并可用
+轨迹命令会在 `outputs/trajectory` 生成标准彩色 `pointcloud.ply`，打包阶段要求该文件已存在，并可用
 以下命令单独验证最终 scene：
 
 ```bash

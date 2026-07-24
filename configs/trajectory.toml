@@ -36,3 +36,13 @@ obstacle_cost_power = 1.5
 random_seed = 7
 shortcut_passes = 120
 smooth_samples_per_meter = 8.0
+
+[pointcloud]
+enabled = true
+filename = "pointcloud.ply"
+report_filename = "pointcloud_report.json"
+obstacle_color_rgb = [0, 0, 128]
+context_color_rgb = [192, 192, 192]
+obstacle_voxel_size_m = 0.02
+context_voxel_size_m = 0.05
+include_context = true

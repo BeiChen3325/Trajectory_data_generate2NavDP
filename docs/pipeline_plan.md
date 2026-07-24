@@ -2,14 +2,15 @@
 
 ## 1. 设计目标
 
-本计划只完成已有轨迹到目标数据集之间缺失的转换，不重新实现轨迹规划、语义点云生成
-或 3DGS 场景构建。
+本计划将轨迹规划产生的共享障碍模型继续转换为目标数据集需要的
+`pointcloud.ply`，不另建第二套障碍识别；3DGS 场景构建仍作为已有能力。
 
-核心任务只有三个：
+核心任务有四个：
 
 1. 将现有轨迹转换为逐帧相机位姿；
 2. 根据相机位姿渲染 RGB 和 Depth；
-3. 将位姿、图像和已有语义点云整理成 `target_data.md` 要求的目录。
+3. 由轨迹阶段的共享障碍模型生成二值刚体障碍 `pointcloud.ply`；
+4. 将位姿、图像和生成的点云整理成 `target_data.md` 要求的目录。
 
 各阶段是可独立运行、可单独替换的命令。阶段之间只交付约定文件，不直接调用上一阶段
 的 Python 接口，也不依赖上一阶段的内部数据结构。现有代码只在各阶段内部复用。
@@ -18,7 +19,7 @@
 上游已有产物
 ├── trajectory.json
 ├── 3DGS PLY
-└── target-compatible pointcloud.ply
+└── 共享障碍模型生成的 pointcloud.ply
           │
           ▼
 [阶段 1] trajectory -> camera poses
@@ -75,11 +76,12 @@
 | --- | --- | --- |
 | `trajectory.json` | 含 `floor_y`、`smooth_path_xz` 和坐标约定 | 否；继续由现有 `robotnav-trajectory` 生成 |
 | 3DGS PLY | 可由现有 `load_ply_to_torch` 读取，坐标与轨迹一致 | 否 |
-| 语义 `pointcloud.ply` | Open3D 可读，障碍颜色满足 `(0,0,0.5)` 距离小于 `0.05` | 否；作为打包输入 |
+| 二值障碍 `pointcloud.ply` | Open3D 可读，障碍颜色满足 `(0,0,0.5)` 距离小于 `0.05` | 由轨迹阶段共享障碍模型生成 |
 | `configs/render.toml` | 3DGS 路径、图像尺寸、内参来源和渲染设置 | 已有配置，按需扩展原 schema |
 
-如果语义 `pointcloud.ply` 尚未生成，应由独立的上游点云标注工具负责。阶段 3 只校验并
-复制它，不根据 LAS 或规划 mask 临时生成它。这样以后替换点云标注方法不会影响本计划。
+`pointcloud.ply` 不是放在 `data/input` 的外生文件。它与 `trajectory.json` 共用一次
+LAS 场景预处理和障碍识别，默认写到 `outputs/trajectory/pointcloud.ply`。打包阶段只
+校验并复制该正式产物，不从调试 PNG 反推点云。详细方案见 `pointcloud_plan.md`。
 
 ### 3.2 最终输出
 
@@ -107,25 +109,24 @@
 ### 3.3 明确不属于核心范围的工作
 
 - LAS 到 2.5D 地图、A* 和轨迹平滑；
-- LAS 到语义 `pointcloud.ply`；
 - 3DGS PLY 的训练或坐标对齐；
 - 对现有轨迹规划主流程进行大规模库化重构；
 - 多 episode 调度、随机批量轨迹和质量优化。
 
-这些能力可以有独立工具，但不能成为完成本计划三个核心阶段的前置开发任务。
+这些能力可以有独立工具，但不能成为完成数据集转换三个阶段的前置开发任务。
 
 ## 4. 新增配置文件及参数归属
 
 新增 `configs/dataset_build.toml`，它只配置本计划新增的输入连接、相机适配、
 工作目录和打包需求，不复制 `trajectory.toml` 或 `render.toml` 的算法参数。
 
-当前结构：
+目标结构（实现点云生成后）：
 
 ```toml
 [paths]
 trajectory_dir = "outputs/trajectory"
 trajectory_filename = "trajectory.json"
-semantic_pointcloud_dir = "data/input"
+semantic_pointcloud_dir = "outputs/trajectory"
 semantic_pointcloud_filename = "pointcloud.ply"
 work_dir = "outputs/dataset_build"
 dataset_root = "data/target"
@@ -152,9 +153,9 @@ overwrite = false
 
 | 参数 | 唯一配置来源 |
 | --- | --- |
-| LAS、地面估计、地图、A*、平滑、轨迹随机性 | `trajectory.toml`，仅供上游轨迹命令使用 |
+| LAS、地面估计、共享障碍模型、点云导出、A*、平滑、轨迹随机性 | `trajectory.toml` |
 | 3DGS PLY、宽高、FOV、up axis、背景 | `render.toml`，仅供渲染阶段使用 |
-| 轨迹文件、语义点云、工作目录、数据集根目录 | `dataset_build.toml` |
+| 轨迹和已生成点云的连接路径、工作目录、数据集根目录 | `dataset_build.toml` |
 | 相机离地高度、base extrinsic、camera batch size | `dataset_build.toml` |
 | group、scene 和覆盖策略 | `dataset_build.toml` |
 | `chunk-000`、`000`、ED depth、`10000 units/m`、无效深度 `0` | 第一版实现/文件契约常量，不配置 |
@@ -290,7 +291,7 @@ LAS backend、adaptive 编码或 `1000 units/m` 默认值。
 
 - `camera_trajectory.npz/json`；
 - RGB-D 渲染目录及 `render_manifest.json`；
-- 已有语义 `pointcloud.ply`；
+- 轨迹阶段生成的二值障碍 `pointcloud.ply`；
 - `dataset_build.toml`。
 
 处理：
@@ -299,7 +300,7 @@ LAS backend、adaptive 编码或 `1000 units/m` 默认值。
 2. 按 manifest 顺序写入目标 RGB/Depth 目录；
 3. 写 `000.parquet`；
 4. 写 `episodes_stats.jsonl`；
-5. 校验并复制语义点云；
+5. 校验并复制二值障碍点云；
 6. 写 `run_manifest.json`；
 7. 在 staging 目录完成后再提交最终 scene 目录，默认拒绝覆盖。
 
@@ -360,9 +361,9 @@ smoke test。
 1. 三个阶段均可独立运行，只通过固定文件交换数据；
 2. 任一阶段可被替代实现替换，只要输出满足相同 contract version；
 3. `dataset_build.toml` 只含新增需求参数，不复制轨迹和渲染算法参数；
-4. 轨迹到位姿、位姿到 RGB-D、最终整理三个核心任务全部完成；
+4. 轨迹到位姿、位姿到 RGB-D、点云生成和最终整理四个核心任务全部完成；
 5. 最终目录完全符合 `target_data.md`；
-6. 轨迹规划和语义点云生成没有被重新纳入本计划。
+6. 轨迹和点云共享一次障碍识别，规划膨胀与物理障碍几何保持语义隔离。
 
 ## 10. 当前实现状态
 
@@ -375,5 +376,6 @@ smoke test。
 - Parquet、JSONL、语义点云结构校验、staging 写入和最终 scene 自检；
 - 无 GPU 单元测试及真实 3DGS GPU smoke test。
 
-当前真实输入已完成 124 帧位姿和 RGB-D 中间产物。最终真实 scene 尚未打包，因为默认
-`data/input/pointcloud.ply` 尚未提供；该文件按本计划属于可替换的上游语义点云产物。
+共享障碍模型和保留原始代表点的点云导出已接入轨迹流水线；规划继续使用碰撞高度带，
+语义点云则保留完整障碍高度并包含稀疏上下文。最终打包继续消费
+`outputs/trajectory/pointcloud.ply`。

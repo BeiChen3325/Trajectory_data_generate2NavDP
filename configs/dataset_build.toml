@@ -1,7 +1,7 @@
 [paths]
 trajectory_dir = "outputs/trajectory"
 trajectory_filename = "trajectory.json"
-semantic_pointcloud_dir = "data/input"
+semantic_pointcloud_dir = "outputs/trajectory"
 semantic_pointcloud_filename = "pointcloud.ply"
 work_dir = "outputs/dataset_build"
 dataset_root = "data/target"

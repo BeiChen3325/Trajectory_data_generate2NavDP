@@ -8,6 +8,18 @@ from robotnav.config import ConfigurationError, load_command_toml, load_path_con
 
 
 @dataclass(frozen=True)
+class PointCloudConfig:
+    enabled: bool
+    filename: str
+    report_filename: str
+    obstacle_color_rgb: tuple[int, int, int]
+    context_color_rgb: tuple[int, int, int]
+    obstacle_voxel_size_m: float
+    context_voxel_size_m: float
+    include_context: bool
+
+
+@dataclass(frozen=True)
 class MapConfig:
     las_path: Path
     output_dir: Path
@@ -42,6 +54,7 @@ class MapConfig:
     random_seed: int
     shortcut_passes: int
     smooth_samples_per_meter: float
+    pointcloud: PointCloudConfig
 
 
 def _optional_pair(value: Any, name: str) -> tuple[float, float] | None:
@@ -54,13 +67,29 @@ def _optional_pair(value: Any, name: str) -> tuple[float, float] | None:
     return (float(value[0]), float(value[1]))
 
 
+def _rgb_triplet(value: Any, name: str) -> tuple[int, int, int]:
+    valid = (
+        isinstance(value, list)
+        and len(value) == 3
+        and all(isinstance(item, int) and not isinstance(item, bool) for item in value)
+        and all(0 <= item <= 255 for item in value)
+    )
+    if not valid:
+        raise ConfigurationError(f"[pointcloud].{name} must contain three integers in [0,255]")
+    return cast(tuple[int, int, int], tuple(value))
+
+
 def load_map_config(filename: str = "trajectory.toml") -> MapConfig:
     """Load the complete trajectory configuration without flattening TOML sections."""
-    raw = load_command_toml(filename, sections={"paths", "navigation"})
+    raw = load_command_toml(filename, sections={"paths", "navigation", "pointcloud"})
     values = raw["navigation"]
     if not isinstance(values, dict):
         raise ConfigurationError("[navigation] must be a TOML table")
-    expected = {field.name for field in fields(MapConfig)} - {"las_path", "output_dir"}
+    expected = {field.name for field in fields(MapConfig)} - {
+        "las_path",
+        "output_dir",
+        "pointcloud",
+    }
     missing = expected - values.keys()
     unknown = values.keys() - expected
     if missing or unknown:
@@ -78,10 +107,48 @@ def load_map_config(filename: str = "trajectory.toml") -> MapConfig:
         raise ConfigurationError("[navigation].axis_transform must be zup-to-yup or none")
     if cast(float, values["resolution_m"]) <= 0 or cast(int, values["chunk_size"]) <= 0:
         raise ConfigurationError("[navigation].resolution_m and chunk_size must be positive")
+
+    pointcloud_values = raw["pointcloud"]
+    if not isinstance(pointcloud_values, dict):
+        raise ConfigurationError("[pointcloud] must be a TOML table")
+    pointcloud_expected = {field.name for field in fields(PointCloudConfig)}
+    missing = pointcloud_expected - pointcloud_values.keys()
+    unknown = pointcloud_values.keys() - pointcloud_expected
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append("missing keys: " + ", ".join(sorted(missing)))
+        if unknown:
+            details.append("unknown keys: " + ", ".join(sorted(unknown)))
+        raise ConfigurationError(f"Invalid [pointcloud] ({'; '.join(details)})")
+    for key in ("enabled", "include_context"):
+        if not isinstance(pointcloud_values[key], bool):
+            raise ConfigurationError(f"[pointcloud].{key} must be a boolean")
+    for key in ("filename", "report_filename"):
+        value = pointcloud_values[key]
+        if not isinstance(value, str) or not value or Path(value).name != value:
+            raise ConfigurationError(f"[pointcloud].{key} must be a plain filename")
+    for key in ("obstacle_voxel_size_m", "context_voxel_size_m"):
+        value = pointcloud_values[key]
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+            raise ConfigurationError(f"[pointcloud].{key} must be positive")
+    pointcloud = PointCloudConfig(
+        enabled=pointcloud_values["enabled"],
+        filename=pointcloud_values["filename"],
+        report_filename=pointcloud_values["report_filename"],
+        obstacle_color_rgb=_rgb_triplet(
+            pointcloud_values["obstacle_color_rgb"], "obstacle_color_rgb"
+        ),
+        context_color_rgb=_rgb_triplet(pointcloud_values["context_color_rgb"], "context_color_rgb"),
+        obstacle_voxel_size_m=float(pointcloud_values["obstacle_voxel_size_m"]),
+        context_voxel_size_m=float(pointcloud_values["context_voxel_size_m"]),
+        include_context=pointcloud_values["include_context"],
+    )
     paths = load_path_config(filename)
     return MapConfig(
         las_path=paths.las_path,
         output_dir=paths.output_dir,
+        pointcloud=pointcloud,
         **cast(
             Any,
             {
