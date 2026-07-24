@@ -43,6 +43,30 @@ uv run robotnav-trajectory
 
 也可以直接传入命令行参数覆盖默认参数。命令行参数优先于 TOML 配置和代码默认值。
 
+## 目标数据集构建
+
+`configs/dataset_build.toml` 配置既有轨迹、语义点云、工作目录和目标 scene。
+三个阶段通过版本化文件交付，可独立执行：
+
+```bash
+uv run robotnav-trajectory-to-camera --config dataset_build.toml
+uv run robotnav-render-trajectory --config dataset_build.toml --render-config render.toml
+uv run robotnav-package-dataset --config dataset_build.toml
+```
+
+也可以顺序执行全部阶段：
+
+```bash
+uv run robotnav-build-dataset --config dataset_build.toml --render-config render.toml
+```
+
+打包阶段要求 `dataset_build.toml` 指定的标准彩色 `pointcloud.ply` 已存在，并可用
+以下命令单独验证最终 scene：
+
+```bash
+uv run robotnav-validate-dataset data/target/robotnav/scene-000
+```
+
 ## 静态检查
 
 ```bash

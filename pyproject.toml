@@ -5,8 +5,10 @@ description = "Data engine and navigation utilities for RobotNav"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "numpy<2",
+    "numpy",
     "opencv-python",
+    "pandas",
+    "pyarrow",
     "plyfile",
     "tomli>=2.0",
 ]
@@ -30,6 +32,11 @@ robotnav-render = "robotnav.rendering.render_one_view:render_batch"
 robotnav-depth = "robotnav.rendering.depth_render:main"
 robotnav-compare = "robotnav.rendering.compare_render:main"
 robotnav-trajectory = "robotnav.generate_trajectory:main"
+robotnav-trajectory-to-camera = "robotnav.dataset.trajectory_to_camera:main"
+robotnav-render-trajectory = "robotnav.dataset.render_trajectory:main"
+robotnav-package-dataset = "robotnav.dataset.package_dataset:main"
+robotnav-build-dataset = "robotnav.dataset.build_dataset:main"
+robotnav-validate-dataset = "robotnav.dataset.validate_dataset:main"
 
 [build-system]
 requires = ["hatchling"]

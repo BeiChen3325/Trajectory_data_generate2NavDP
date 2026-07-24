@@ -1,0 +1,24 @@
+[paths]
+trajectory_dir = "outputs/trajectory"
+trajectory_filename = "trajectory.json"
+semantic_pointcloud_dir = "data/input"
+semantic_pointcloud_filename = "pointcloud.ply"
+work_dir = "outputs/dataset_build"
+dataset_root = "data/target"
+
+[trajectory_to_camera]
+height_above_floor_m = 0.5
+base_extrinsic = [
+  1.0, 0.0, 0.0, 0.0,
+  0.0, 1.0, 0.0, 0.0,
+  0.0, 0.0, 1.0, 0.0,
+  0.0, 0.0, 0.0, 1.0,
+]
+
+[rendering]
+camera_batch_size = 8
+
+[dataset]
+group_dir = "robotnav"
+scene_dir = "scene-000"
+overwrite = false
