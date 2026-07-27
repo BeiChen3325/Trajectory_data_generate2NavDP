@@ -11,10 +11,17 @@ from typing import Any
 import numpy as np
 from plyfile import PlyData, PlyElement
 
-from robotnav.navigation.config import PointCloudConfig
-from robotnav.navigation.las_io import iter_las_xyz
-from robotnav.navigation.occupancy_map import world_to_grid
-from robotnav.navigation.scene_obstacles import SceneObstacleModel
+from robotnav.navigation.scene.artifact import (
+    SceneArtifact,
+    validate_source_las,
+)
+from robotnav.navigation.scene.contracts import SceneObstacleModel
+from robotnav.navigation.scene.las_io import iter_las_xyz
+from robotnav.navigation.scene.occupancy_map import world_to_grid
+from robotnav.navigation.semantic_pointcloud.config import (
+    PointCloudConfig,
+    PointCloudExportConfig,
+)
 
 
 class VoxelAccumulator:
@@ -219,4 +226,30 @@ def export_las_pointcloud(
         "pointcloud_config": asdict(config),
     }
     (output_dir / config.report_filename).write_text(json.dumps(report, indent=2), encoding="utf-8")
+    return report
+
+
+def export_semantic_pointcloud(
+    config: PointCloudExportConfig,
+    scene: SceneArtifact,
+) -> dict[str, Any]:
+    """Export PLY independently while enforcing the persisted scene/LAS hash chain."""
+    source_las = validate_source_las(scene, config.paths.las_path)
+    output_dir = config.paths.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report = export_las_pointcloud(
+        config.paths.las_path,
+        output_dir,
+        scene.model,
+        config.pointcloud,
+        ground_margin_m=scene.ground_margin_m,
+        chunk_size=config.runtime.chunk_size,
+        max_stream_points=config.runtime.max_stream_points,
+    )
+    report["source_las"] = source_las
+    report["source_scene_model"] = str(scene.model_path.resolve())
+    report["source_scene_model_sha256"] = scene.model_sha256
+    (output_dir / config.pointcloud.report_filename).write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
     return report

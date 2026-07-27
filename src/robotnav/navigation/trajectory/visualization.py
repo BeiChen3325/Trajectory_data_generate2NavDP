@@ -1,3 +1,5 @@
+"""Trajectory debug visualization."""
+
 from pathlib import Path
 
 import cv2
@@ -49,10 +51,7 @@ def draw_path_debug(
 
 
 def draw_grid_polyline(canvas, points_xy, color, thickness):
-    points = np.asarray(points_xy, dtype=np.int32)
-    h = canvas.shape[0]
-    pts = points.copy()
-    pts[:, 1] = h - 1 - pts[:, 1]
+    pts = np.asarray(points_xy, dtype=np.int32)
     cv2.polylines(canvas, [pts.reshape(-1, 1, 2)], isClosed=False, color=color, thickness=thickness)
     cv2.circle(canvas, tuple(pts[0]), 4, (0, 255, 0), -1)
     cv2.circle(canvas, tuple(pts[-1]), 4, (0, 0, 255), -1)

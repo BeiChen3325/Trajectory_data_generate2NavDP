@@ -1,3 +1,5 @@
+"""2.5D occupancy-map construction and coordinate conversion."""
+
 import json
 from pathlib import Path
 

@@ -1,0 +1,19 @@
+[paths]
+scene_dir = "outputs/navigation_scene"
+output_dir = "outputs/trajectories"
+
+[planner]
+obstacle_cost_weight = 0.8
+obstacle_cost_power = 1.5
+shortcut_passes = 120
+smooth_samples_per_meter = 8.0
+smooth_iterations = 2
+
+[trajectory_batch]
+count = 8
+seed = 7
+min_start_goal_distance_m = 3.0
+min_endpoint_separation_m = 0.5
+max_sampling_attempts = 200
+manifest_filename = "trajectory_manifest.json"
+requests = []

@@ -10,9 +10,10 @@ import importlib
 import shutil
 import sys
 
-from robotnav.config import ensure_output_dirs, load_path_config
+from robotnav.config import ensure_output_dirs
+from robotnav.navigation.scene.config import load_scene_build_config
 
-PATHS = load_path_config("trajectory.toml")
+PATHS = load_scene_build_config().paths
 DATA_DIR = PATHS.data_dir
 
 
@@ -55,14 +56,15 @@ def check_cuda_backend() -> None:
 
 def check_project_modules() -> None:
     modules = (
-        "robotnav.navigation.astar_planner",
-        "robotnav.navigation.ground_estimation",
-        "robotnav.navigation.las_io",
-        "robotnav.navigation.occupancy_map",
-        "robotnav.navigation.path_smoothing",
-        "robotnav.navigation.config",
-        "robotnav.navigation.visualization",
-        "robotnav.generate_trajectory",
+        "robotnav.navigation.scene.builder",
+        "robotnav.navigation.scene.ground_estimation",
+        "robotnav.navigation.scene.las_io",
+        "robotnav.navigation.scene.occupancy_map",
+        "robotnav.navigation.trajectory.astar",
+        "robotnav.navigation.trajectory.smoothing",
+        "robotnav.navigation.trajectory.visualization",
+        "robotnav.navigation.semantic_pointcloud.exporter",
+        "robotnav.commands.prepare_navigation_data",
         "robotnav.rendering.render_one_view",
         "robotnav.rendering.compare_render",
         "robotnav.rendering.inspect_point_samples",

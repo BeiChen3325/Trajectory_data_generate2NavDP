@@ -1,3 +1,5 @@
+"""Ground-plane estimation for navigation scene construction."""
+
 import json
 from pathlib import Path
 

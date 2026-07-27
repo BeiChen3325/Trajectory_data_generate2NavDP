@@ -1,3 +1,5 @@
+"""Reusable path shortcutting, densification, and smoothing."""
+
 from itertools import pairwise
 
 import numpy as np

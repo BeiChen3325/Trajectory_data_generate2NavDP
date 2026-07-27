@@ -1,3 +1,5 @@
+"""Reusable A* and endpoint-selection primitives."""
+
 import heapq
 import math
 
@@ -62,7 +64,11 @@ def choose_auto_start_goal(free_mask, distance_m, spec, min_distance_m, seed=7):
     if far.size == 0:
         diffs = candidates[:, [1, 0]].astype(np.float64) - first_xy
         far = candidates[[int(np.argmax(np.linalg.norm(diffs, axis=1)))]]
-    second = far[np.argmax(distance_m[far[:, 0], far[:, 1]])]
+    # Keep the original clearance bias while allowing deterministic variation
+    # across route seeds; always taking argmax collapses many batches to a few
+    # corner goals on maps with uniform clearance.
+    second_pool = far[np.argsort(distance_m[far[:, 0], far[:, 1]])[-min(5000, far.shape[0]) :]]
+    second = second_pool[rng.integers(0, second_pool.shape[0])]
     return np.array([first[1], first[0]], dtype=np.int64), np.array(
         [second[1], second[0]], dtype=np.int64
     )

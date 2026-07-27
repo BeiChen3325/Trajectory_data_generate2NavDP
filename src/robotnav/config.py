@@ -153,6 +153,10 @@ def load_render_config(filename: str = "render.toml") -> RenderConfig:
 def ensure_output_dirs() -> None:
     """Create output directories declared by validated command configurations."""
     load_render_config().paths.output_dir.mkdir(parents=True, exist_ok=True)
-    from robotnav.navigation.config import load_map_config
+    from robotnav.navigation.scene.config import load_scene_build_config
+    from robotnav.navigation.semantic_pointcloud.config import load_pointcloud_export_config
+    from robotnav.navigation.trajectory.config import load_trajectory_generation_config
 
-    load_map_config().output_dir.mkdir(parents=True, exist_ok=True)
+    load_scene_build_config().paths.output_dir.mkdir(parents=True, exist_ok=True)
+    load_trajectory_generation_config().paths.output_dir.mkdir(parents=True, exist_ok=True)
+    load_pointcloud_export_config().paths.output_dir.mkdir(parents=True, exist_ok=True)

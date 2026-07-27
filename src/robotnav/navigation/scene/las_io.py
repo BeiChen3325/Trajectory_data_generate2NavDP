@@ -1,3 +1,5 @@
+"""Streaming LAS input for navigation scene construction and point-cloud export."""
+
 import struct
 from pathlib import Path
 
