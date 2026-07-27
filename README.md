@@ -28,7 +28,9 @@ data/input/
 
 ```text
 outputs/render/
-outputs/trajectory/
+outputs/navigation_scene/
+outputs/trajectories/
+outputs/semantic_pointcloud/
 ```
 
 大体积点云和生成结果不提交到 Git。
@@ -38,14 +40,28 @@ outputs/trajectory/
 ```bash
 uv run robotnav-render
 uv run robotnav-compare
-uv run robotnav-trajectory
+uv run robotnav-build-scene --config navigation_scene.toml
+uv run robotnav-generate-trajectories --config trajectories.toml
+uv run robotnav-export-pointcloud --config pointcloud_export.toml
 ```
 
-也可以直接传入命令行参数覆盖默认参数。命令行参数优先于 TOML 配置和代码默认值。
+也可以用一个薄编排入口顺序执行三个阶段：
+
+```bash
+uv run robotnav-prepare-navigation-data \
+  --scene-config navigation_scene.toml \
+  --trajectory-config trajectories.toml \
+  --pointcloud-config pointcloud_export.toml
+```
+
+场景构建、轨迹生成和 PLY 导出拥有各自的配置与输出目录。修改 A* 或批量参数只需重跑轨迹；
+修改颜色或体素参数只需重跑 PLY。轨迹批次由
+`outputs/trajectories/trajectory_manifest.json` 索引。
 
 ## 目标数据集构建
 
-`configs/dataset_build.toml` 配置轨迹阶段生成的轨迹与障碍点云、工作目录和目标 scene。
+`configs/dataset_build.toml` 当前明确选择批次中的一条轨迹（默认 `auto_000.json`），并引用
+独立生成的语义点云、工作目录和目标 scene。
 三个阶段通过版本化文件交付，可独立执行：
 
 ```bash
@@ -60,8 +76,7 @@ uv run robotnav-package-dataset --config dataset_build.toml
 uv run robotnav-build-dataset --config dataset_build.toml --render-config render.toml
 ```
 
-轨迹命令会在 `outputs/trajectory` 生成标准彩色 `pointcloud.ply`，打包阶段要求该文件已存在，并可用
-以下命令单独验证最终 scene：
+语义点云默认位于 `outputs/semantic_pointcloud/pointcloud.ply`。以下命令可单独验证最终 scene：
 
 ```bash
 uv run robotnav-validate-dataset data/target/robotnav/scene-000
@@ -75,4 +90,5 @@ uv run ruff format --check .
 uv run ty check
 ```
 
-源码位于 `src/robotnav/`，渲染代码位于 `rendering/`，导航和轨迹代码位于 `navigation/`。
+源码位于 `src/robotnav/`。导航职责进一步分为 `navigation/scene/`、
+`navigation/trajectory/` 和 `navigation/semantic_pointcloud/`，CLI 位于 `commands/`。
