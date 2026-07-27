@@ -63,9 +63,9 @@ def write_semantic_ply(path: Path) -> None:
 
 def test_default_dataset_build_config_loads() -> None:
     config = load_dataset_build_config()
-    assert config.paths.trajectory_filename == "trajectory.json"
+    assert config.paths.trajectory_filename == "auto_000.json"
     assert config.paths.semantic_pointcloud_filename == "pointcloud.ply"
-    assert config.paths.semantic_pointcloud_dir == config.paths.trajectory_dir
+    assert config.paths.semantic_pointcloud_dir != config.paths.trajectory_dir
     assert config.rendering.camera_batch_size > 0
 
 

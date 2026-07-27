@@ -5,16 +5,19 @@ from pathlib import Path
 import numpy as np
 from plyfile import PlyData
 
-from robotnav.navigation.config import PointCloudConfig, load_map_config
-from robotnav.navigation.pointcloud_export import (
-    VoxelAccumulator,
-    build_pointcloud_points,
-    write_colored_pointcloud,
-)
-from robotnav.navigation.scene_obstacles import (
+from robotnav.navigation.scene.contracts import (
     SceneObstacleModel,
     load_scene_obstacle_model,
     save_scene_obstacle_model,
+)
+from robotnav.navigation.semantic_pointcloud.config import (
+    PointCloudConfig,
+    load_pointcloud_export_config,
+)
+from robotnav.navigation.semantic_pointcloud.exporter import (
+    VoxelAccumulator,
+    build_pointcloud_points,
+    write_colored_pointcloud,
 )
 
 
@@ -44,7 +47,6 @@ def make_model() -> SceneObstacleModel:
 
 def make_config(*, include_context: bool) -> PointCloudConfig:
     return PointCloudConfig(
-        enabled=True,
         filename="pointcloud.ply",
         report_filename="pointcloud_report.json",
         obstacle_color_rgb=(0, 0, 128),
@@ -56,8 +58,7 @@ def make_config(*, include_context: bool) -> PointCloudConfig:
 
 
 def test_default_pointcloud_config_loads() -> None:
-    config = load_map_config().pointcloud
-    assert config.enabled
+    config = load_pointcloud_export_config().pointcloud
     assert config.filename == "pointcloud.ply"
     assert config.obstacle_color_rgb == (0, 0, 128)
     assert config.include_context
