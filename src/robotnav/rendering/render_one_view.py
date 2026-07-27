@@ -31,8 +31,8 @@ def _rasterize_compat(**kwargs):
             fallback["backgrounds"] = backgrounds[0]
         try:
             return rasterization(**fallback)
-        except AssertionError:
-            raise exc
+        except AssertionError as fallback_error:
+            raise exc from fallback_error
 
 
 def _sorted_property_names(vertex, prefix):
