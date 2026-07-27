@@ -11,32 +11,28 @@ from robotnav.config import CONFIG_DIR, PROJECT_ROOT, ConfigurationError, load_t
 
 @dataclass(frozen=True)
 class DatasetBuildPaths:
-    trajectory_dir: Path
-    trajectory_filename: str
+    trajectory_manifest: Path
     semantic_pointcloud_dir: Path
     semantic_pointcloud_filename: str
+    semantic_pointcloud_report_filename: str
     work_dir: Path
     dataset_root: Path
-
-    @property
-    def trajectory_path(self) -> Path:
-        return self.trajectory_dir / self.trajectory_filename
 
     @property
     def semantic_pointcloud_path(self) -> Path:
         return self.semantic_pointcloud_dir / self.semantic_pointcloud_filename
 
     @property
-    def camera_trajectory_path(self) -> Path:
-        return self.work_dir / "camera_trajectory.npz"
+    def semantic_pointcloud_report_path(self) -> Path:
+        return self.semantic_pointcloud_dir / self.semantic_pointcloud_report_filename
 
     @property
-    def camera_manifest_path(self) -> Path:
-        return self.work_dir / "camera_trajectory.json"
+    def episodes_dir(self) -> Path:
+        return self.work_dir / "episodes"
 
     @property
-    def rendered_episode_dir(self) -> Path:
-        return self.work_dir / "rendered_episode"
+    def batch_manifest_path(self) -> Path:
+        return self.work_dir / "batch_manifest.json"
 
 
 @dataclass(frozen=True)
@@ -121,25 +117,30 @@ def load_dataset_build_config(filename: str = "dataset_build.toml") -> DatasetBu
         raw,
         "paths",
         {
-            "trajectory_dir",
-            "trajectory_filename",
+            "trajectory_manifest",
             "semantic_pointcloud_dir",
             "semantic_pointcloud_filename",
+            "semantic_pointcloud_report_filename",
             "work_dir",
             "dataset_root",
         },
     )
-    for filename_key in ("trajectory_filename", "semantic_pointcloud_filename"):
+    for filename_key in (
+        "semantic_pointcloud_filename",
+        "semantic_pointcloud_report_filename",
+    ):
         value = path_values[filename_key]
         if not isinstance(value, str) or not value or Path(value).name != value:
             raise ConfigurationError(f"[paths].{filename_key} must be one filename")
     paths = DatasetBuildPaths(
-        trajectory_dir=_project_path(path_values["trajectory_dir"], "[paths].trajectory_dir"),
-        trajectory_filename=path_values["trajectory_filename"],
+        trajectory_manifest=_project_path(
+            path_values["trajectory_manifest"], "[paths].trajectory_manifest"
+        ),
         semantic_pointcloud_dir=_project_path(
             path_values["semantic_pointcloud_dir"], "[paths].semantic_pointcloud_dir"
         ),
         semantic_pointcloud_filename=path_values["semantic_pointcloud_filename"],
+        semantic_pointcloud_report_filename=path_values["semantic_pointcloud_report_filename"],
         work_dir=_project_path(path_values["work_dir"], "[paths].work_dir"),
         dataset_root=_project_path(path_values["dataset_root"], "[paths].dataset_root"),
     )

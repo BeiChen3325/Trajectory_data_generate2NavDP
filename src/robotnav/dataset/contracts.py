@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 DEPTH_UNITS_PER_METER = 10_000
 INVALID_DEPTH_VALUE = 0
 

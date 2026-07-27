@@ -1,8 +1,8 @@
 [paths]
-trajectory_dir = "outputs/trajectories/routes"
-trajectory_filename = "auto_000.json"
+trajectory_manifest = "outputs/trajectories/trajectory_manifest.json"
 semantic_pointcloud_dir = "outputs/semantic_pointcloud"
 semantic_pointcloud_filename = "pointcloud.ply"
+semantic_pointcloud_report_filename = "pointcloud_report.json"
 work_dir = "outputs/dataset_build"
 dataset_root = "data/target"
 

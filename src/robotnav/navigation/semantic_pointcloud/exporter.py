@@ -13,6 +13,7 @@ from plyfile import PlyData, PlyElement
 
 from robotnav.navigation.scene.artifact import (
     SceneArtifact,
+    file_sha256,
     validate_source_las,
 )
 from robotnav.navigation.scene.contracts import SceneObstacleModel
@@ -22,6 +23,8 @@ from robotnav.navigation.semantic_pointcloud.config import (
     PointCloudConfig,
     PointCloudExportConfig,
 )
+
+POINTCLOUD_REPORT_CONTRACT_VERSION = 2
 
 
 class VoxelAccumulator:
@@ -211,7 +214,7 @@ def export_las_pointcloud(
     write_colored_pointcloud(pointcloud_path, obstacle_points, context_points, config)
     all_points = np.concatenate([obstacle_points, context_points], axis=0)
     report: dict[str, Any] = {
-        "contract_version": 1,
+        "contract_version": POINTCLOUD_REPORT_CONTRACT_VERSION,
         "source_las": str(las_path),
         "pointcloud": str(pointcloud_path),
         "axis_transform": model.axis_transform,
@@ -249,6 +252,7 @@ def export_semantic_pointcloud(
     report["source_las"] = source_las
     report["source_scene_model"] = str(scene.model_path.resolve())
     report["source_scene_model_sha256"] = scene.model_sha256
+    report["pointcloud_sha256"] = file_sha256(output_dir / config.pointcloud.filename)
     (output_dir / config.pointcloud.report_filename).write_text(
         json.dumps(report, indent=2), encoding="utf-8"
     )

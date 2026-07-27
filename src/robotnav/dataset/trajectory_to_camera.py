@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import numpy as np
 
+from robotnav.dataset.batch_manifest import write_batch_manifest
 from robotnav.dataset.config import DatasetBuildConfig, load_dataset_build_config
 from robotnav.dataset.contracts import (
     CONTRACT_VERSION,
     CameraTrajectory,
-    file_sha256,
     save_camera_trajectory,
+)
+from robotnav.dataset.trajectory_manifest import (
+    EpisodeSpec,
+    TrajectoryBatch,
+    load_trajectory_batch,
 )
 
 
@@ -82,6 +86,7 @@ def build_camera_trajectory(
     source_trajectory: Path,
     source_sha256: str,
     coordinate_convention: str,
+    extra_metadata: dict[str, object] | None = None,
 ) -> CameraTrajectory:
     """Convert path points to mutually inverse camera matrices."""
     points_xz = np.asarray(points_xz, dtype=np.float64)
@@ -114,6 +119,8 @@ def build_camera_trajectory(
         "floor_y": float(floor_y),
         "height_above_floor_m": float(height_above_floor_m),
     }
+    if extra_metadata:
+        metadata.update(extra_metadata)
     return CameraTrajectory(
         camera_to_world=camera_to_world,
         world_to_camera=world_to_camera,
@@ -122,32 +129,54 @@ def build_camera_trajectory(
     )
 
 
-def run_trajectory_to_camera(config: DatasetBuildConfig) -> CameraTrajectory:
-    trajectory_path = config.paths.trajectory_path
-    if not trajectory_path.is_file():
-        raise FileNotFoundError(trajectory_path)
-    raw = json.loads(trajectory_path.read_text(encoding="utf-8"))
-    for field in ("floor_y", "smooth_path_xz", "coordinate_convention"):
-        if field not in raw:
-            raise ValueError(f"Trajectory JSON is missing required field: {field}")
+def build_episode_camera_trajectory(
+    episode: EpisodeSpec,
+    batch: TrajectoryBatch,
+    config: DatasetBuildConfig,
+) -> CameraTrajectory:
+    """Build and persist one episode using the shared pose algorithm."""
     trajectory = build_camera_trajectory(
-        np.asarray(raw["smooth_path_xz"], dtype=np.float64),
-        float(raw["floor_y"]),
+        episode.points_xz,
+        episode.floor_y,
         config.trajectory_to_camera.height_above_floor_m,
-        source_trajectory=trajectory_path,
-        source_sha256=file_sha256(trajectory_path),
-        coordinate_convention=str(raw["coordinate_convention"]),
+        source_trajectory=episode.trajectory_path,
+        source_sha256=episode.trajectory_sha256,
+        coordinate_convention=episode.coordinate_convention,
+        extra_metadata={
+            "trajectory_id": episode.trajectory_id,
+            "episode_index": episode.episode_index,
+            "episode_name": episode.episode_name,
+            "source_batch_manifest": str(batch.manifest_path),
+            "source_batch_manifest_sha256": batch.manifest_sha256,
+            "source_scene_model_sha256": batch.source_scene_model_sha256,
+        },
     )
     save_camera_trajectory(
         trajectory,
-        config.paths.camera_trajectory_path,
-        config.paths.camera_manifest_path,
+        episode.paths.camera_trajectory_path,
+        episode.paths.camera_manifest_path,
     )
     return trajectory
 
 
+def run_trajectory_to_camera(
+    config: DatasetBuildConfig,
+) -> tuple[TrajectoryBatch, tuple[CameraTrajectory, ...]]:
+    batch = load_trajectory_batch(
+        config.paths.trajectory_manifest,
+        config.paths.episodes_dir,
+    )
+    trajectories = tuple(
+        build_episode_camera_trajectory(episode, batch, config) for episode in batch.episodes
+    )
+    write_batch_manifest(batch, config.paths.batch_manifest_path)
+    return batch, trajectories
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert trajectory.json into camera pose files.")
+    parser = argparse.ArgumentParser(
+        description="Convert a trajectory manifest into per-episode camera pose files."
+    )
     parser.add_argument("--config", default="dataset_build.toml")
     return parser.parse_args()
 
@@ -155,10 +184,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = load_dataset_build_config(args.config)
-    trajectory = run_trajectory_to_camera(config)
-    print(f"Saved {trajectory.frame_count} camera poses")
-    print(f"  {config.paths.camera_trajectory_path}")
-    print(f"  {config.paths.camera_manifest_path}")
+    batch, trajectories = run_trajectory_to_camera(config)
+    print(f"Saved {sum(item.frame_count for item in trajectories)} camera poses")
+    print(f"  episodes: {len(batch.episodes)}")
+    print(f"  work directory: {config.paths.episodes_dir}")
 
 
 if __name__ == "__main__":

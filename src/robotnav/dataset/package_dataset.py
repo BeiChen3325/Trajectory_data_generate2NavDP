@@ -1,4 +1,4 @@
-"""Stage 3: package fixed camera/RGB-D artifacts into the target dataset contract."""
+"""Stage 3: package all camera/RGB-D episodes into the target dataset contract."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import json
 import shutil
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,14 +20,32 @@ from robotnav.dataset.contracts import (
     CONTRACT_VERSION,
     DEPTH_UNITS_PER_METER,
     INVALID_DEPTH_VALUE,
+    CameraTrajectory,
     file_sha256,
     load_camera_trajectory,
 )
+from robotnav.dataset.trajectory_manifest import (
+    EpisodeSpec,
+    TrajectoryBatch,
+    load_trajectory_batch,
+)
+from robotnav.navigation.semantic_pointcloud.exporter import (
+    POINTCLOUD_REPORT_CONTRACT_VERSION,
+)
 
 CHUNK_NAME = "chunk-000"
-EPISODE_NAME = "000"
 OBSTACLE_COLOR = np.array([0.0, 0.0, 0.5], dtype=np.float64)
 OBSTACLE_COLOR_DISTANCE = 0.05
+
+
+@dataclass(frozen=True)
+class EpisodeArtifacts:
+    spec: EpisodeSpec
+    camera: CameraTrajectory
+    render_manifest: dict[str, Any]
+    rgb_paths: tuple[Path, ...]
+    depth_paths: tuple[Path, ...]
+    intrinsic: np.ndarray
 
 
 def _load_render_manifest(path: Path) -> dict[str, Any]:
@@ -35,6 +54,8 @@ def _load_render_manifest(path: Path) -> dict[str, Any]:
     manifest = json.loads(path.read_text(encoding="utf-8"))
     required = {
         "contract_version",
+        "trajectory_id",
+        "episode_index",
         "frame_count",
         "camera_intrinsic",
         "width",
@@ -43,6 +64,9 @@ def _load_render_manifest(path: Path) -> dict[str, Any]:
         "depth_paths",
         "depth_units_per_meter",
         "invalid_depth_value",
+        "source_trajectory_sha256",
+        "source_batch_manifest_sha256",
+        "source_scene_model_sha256",
         "camera_trajectory_npz_sha256",
         "camera_trajectory_manifest_sha256",
     }
@@ -58,7 +82,11 @@ def _artifact_path(root: Path, relative: str) -> Path:
     path = Path(relative)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError(f"Artifact path must stay below render directory: {relative}")
-    resolved = root / path
+    resolved = (root / path).resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as error:
+        raise ValueError(f"Artifact path escapes render directory: {relative}") from error
     if not resolved.is_file():
         raise FileNotFoundError(resolved)
     return resolved
@@ -98,7 +126,7 @@ def validate_semantic_pointcloud(ply_path: Path) -> None:
 
 def _validate_source_images(
     render_dir: Path, manifest: dict[str, Any]
-) -> tuple[list[Path], list[Path]]:
+) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
     count = int(manifest["frame_count"])
     rgb_values = manifest["rgb_paths"]
     depth_values = manifest["depth_paths"]
@@ -108,8 +136,8 @@ def _validate_source_images(
         raise ValueError("Render manifest frame_count does not match RGB/Depth path counts")
     width = int(manifest["width"])
     height = int(manifest["height"])
-    rgb_paths = [_artifact_path(render_dir, str(value)) for value in rgb_values]
-    depth_paths = [_artifact_path(render_dir, str(value)) for value in depth_values]
+    rgb_paths = tuple(_artifact_path(render_dir, str(value)) for value in rgb_values)
+    depth_paths = tuple(_artifact_path(render_dir, str(value)) for value in depth_values)
     for rgb_path, depth_path in zip(rgb_paths, depth_paths, strict=True):
         rgb = cv2.imread(str(rgb_path), cv2.IMREAD_UNCHANGED)
         depth = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
@@ -139,8 +167,81 @@ def _write_episode_parquet(
     frame.to_parquet(path, engine="pyarrow", index=False)
 
 
+def _load_episode_artifacts(
+    batch: TrajectoryBatch,
+    episode: EpisodeSpec,
+) -> EpisodeArtifacts:
+    camera = load_camera_trajectory(
+        episode.paths.camera_trajectory_path,
+        episode.paths.camera_manifest_path,
+    )
+    expected_camera_metadata = {
+        "trajectory_id": episode.trajectory_id,
+        "episode_index": episode.episode_index,
+        "source_trajectory_sha256": episode.trajectory_sha256,
+        "source_batch_manifest_sha256": batch.manifest_sha256,
+        "source_scene_model_sha256": batch.source_scene_model_sha256,
+    }
+    for field, value in expected_camera_metadata.items():
+        if camera.metadata.get(field) != value:
+            raise ValueError(f"Camera manifest {episode.trajectory_id!r} does not match {field}")
+    render_manifest = _load_render_manifest(episode.paths.render_manifest_path)
+    expected = {
+        "trajectory_id": episode.trajectory_id,
+        "episode_index": episode.episode_index,
+        "frame_count": camera.frame_count,
+        "source_trajectory_sha256": episode.trajectory_sha256,
+        "source_batch_manifest_sha256": batch.manifest_sha256,
+        "source_scene_model_sha256": batch.source_scene_model_sha256,
+        "camera_trajectory_npz_sha256": file_sha256(episode.paths.camera_trajectory_path),
+        "camera_trajectory_manifest_sha256": file_sha256(episode.paths.camera_manifest_path),
+    }
+    for field, value in expected.items():
+        if render_manifest.get(field) != value:
+            raise ValueError(f"Render manifest {episode.trajectory_id!r} does not match {field}")
+    if render_manifest["depth_units_per_meter"] != DEPTH_UNITS_PER_METER:
+        raise ValueError("Rendered depth unit does not match target_data.md")
+    if render_manifest["invalid_depth_value"] != INVALID_DEPTH_VALUE:
+        raise ValueError("Rendered invalid depth value does not match target_data.md")
+    intrinsic = np.asarray(render_manifest["camera_intrinsic"], dtype=np.float64)
+    if intrinsic.size != 9 or not np.isfinite(intrinsic).all():
+        raise ValueError("Render manifest camera_intrinsic must contain 9 finite values")
+    rgb_paths, depth_paths = _validate_source_images(
+        episode.paths.rendered_episode_dir,
+        render_manifest,
+    )
+    return EpisodeArtifacts(
+        spec=episode,
+        camera=camera,
+        render_manifest=render_manifest,
+        rgb_paths=rgb_paths,
+        depth_paths=depth_paths,
+        intrinsic=intrinsic.reshape(3, 3),
+    )
+
+
+def _validate_pointcloud_binding(config: DatasetBuildConfig, batch: TrajectoryBatch) -> dict:
+    report_path = config.paths.semantic_pointcloud_report_path
+    if not report_path.is_file():
+        raise FileNotFoundError(report_path)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("contract_version") != POINTCLOUD_REPORT_CONTRACT_VERSION:
+        raise ValueError(
+            f"Unsupported pointcloud report contract: {report.get('contract_version')}"
+        )
+    if report.get("source_scene_model_sha256") != batch.source_scene_model_sha256:
+        raise ValueError("Semantic pointcloud and trajectory batch belong to different scenes")
+    expected_pointcloud_sha256 = report.get("pointcloud_sha256")
+    if not isinstance(expected_pointcloud_sha256, str):
+        raise ValueError("pointcloud_report.json has no pointcloud_sha256")
+    if expected_pointcloud_sha256 != file_sha256(config.paths.semantic_pointcloud_path):
+        raise ValueError("Semantic pointcloud SHA-256 does not match pointcloud_report.json")
+    validate_semantic_pointcloud(config.paths.semantic_pointcloud_path)
+    return report
+
+
 def validate_target_scene(scene_dir: Path) -> dict[str, Any]:
-    """Validate the final directory independently of the packaging write path."""
+    """Validate a complete multi-episode scene independently of its build inputs."""
     data_dir = scene_dir / "data" / CHUNK_NAME
     rgb_dir = scene_dir / "videos" / CHUNK_NAME / "observation.images.rgb"
     depth_dir = scene_dir / "videos" / CHUNK_NAME / "observation.images.depth"
@@ -149,79 +250,97 @@ def validate_target_scene(scene_dir: Path) -> dict[str, Any]:
     parquet_paths = sorted(data_dir.glob("*.parquet"))
     rgb_paths = sorted(rgb_dir.glob("*.png"))
     depth_paths = sorted(depth_dir.glob("*.png"))
-    if len(parquet_paths) != 1:
-        raise ValueError("First-version target scene must contain exactly one parquet file")
+    if not parquet_paths:
+        raise ValueError("Target scene must contain at least one parquet file")
     if not stats_path.is_file():
         raise FileNotFoundError(stats_path)
     stats_lines = [line for line in stats_path.read_text(encoding="utf-8").splitlines() if line]
-    if len(stats_lines) != 1:
-        raise ValueError("episodes_stats.jsonl must contain exactly one line")
-    stats = json.loads(stats_lines[0])
-    image_index = stats.get("image_index")
-    if image_index != {"min": 0, "max": len(rgb_paths) - 1}:
-        raise ValueError("episodes_stats.jsonl image range does not match RGB files")
+    if len(stats_lines) != len(parquet_paths):
+        raise ValueError("episodes_stats.jsonl line count must match parquet count")
     if not rgb_paths or len(rgb_paths) != len(depth_paths):
         raise ValueError("RGB and Depth file counts must be equal and non-zero")
-    frame = pd.read_parquet(parquet_paths[0])
+
     required_columns = {
         "observation.camera_intrinsic",
         "observation.camera_extrinsic",
         "action",
     }
-    if not required_columns.issubset(frame.columns):
-        raise ValueError("Parquet is missing target columns")
-    if len(frame) != len(rgb_paths):
-        raise ValueError("Parquet row count does not match image count")
-    intrinsic = np.asarray(frame["observation.camera_intrinsic"].tolist()[0]).reshape(3, 3)
-    extrinsic = np.asarray(frame["observation.camera_extrinsic"].tolist()[0]).reshape(4, 4)
-    actions = np.stack(frame["action"].to_numpy()).reshape(-1, 4, 4)
-    if not np.isfinite(intrinsic).all() or not np.isfinite(extrinsic).all():
-        raise ValueError("Parquet camera matrices must be finite")
-    if not np.isfinite(actions).all() or actions.shape[0] < len(rgb_paths):
-        raise ValueError("Parquet actions are invalid or shorter than image sequence")
+    expected_min = 0
+    episodes = []
+    for index, (parquet_path, stats_line) in enumerate(
+        zip(parquet_paths, stats_lines, strict=True)
+    ):
+        stats = json.loads(stats_line)
+        image_index = stats.get("image_index")
+        if not isinstance(image_index, dict):
+            raise ValueError(f"Episode {index} has no image_index")
+        minimum = image_index.get("min")
+        maximum = image_index.get("max")
+        if (
+            not isinstance(minimum, int)
+            or not isinstance(maximum, int)
+            or minimum != expected_min
+            or maximum < minimum
+            or maximum >= len(rgb_paths)
+        ):
+            raise ValueError(f"Episode {index} has an invalid or non-contiguous image range")
+        frame_count = maximum - minimum + 1
+        frame = pd.read_parquet(parquet_path)
+        if not required_columns.issubset(frame.columns):
+            raise ValueError(f"Parquet is missing target columns: {parquet_path}")
+        if len(frame) != frame_count:
+            raise ValueError(f"Parquet row count does not match image range: {parquet_path}")
+        intrinsic = np.asarray(frame["observation.camera_intrinsic"].tolist()[0]).reshape(3, 3)
+        extrinsic = np.asarray(frame["observation.camera_extrinsic"].tolist()[0]).reshape(4, 4)
+        actions = np.stack(frame["action"].to_numpy()).reshape(-1, 4, 4)
+        if not np.isfinite(intrinsic).all() or not np.isfinite(extrinsic).all():
+            raise ValueError(f"Parquet camera matrices must be finite: {parquet_path}")
+        if not np.isfinite(actions).all() or actions.shape[0] != frame_count:
+            raise ValueError(f"Parquet actions do not match image range: {parquet_path}")
+        episodes.append(
+            {
+                "episode_index": index,
+                "parquet": str(parquet_path),
+                "image_index": {"min": minimum, "max": maximum},
+                "frame_count": frame_count,
+            }
+        )
+        expected_min = maximum + 1
+    if expected_min != len(rgb_paths):
+        raise ValueError("Episode image ranges do not cover every RGB/Depth image")
+
+    for rgb_path, depth_path in zip(rgb_paths, depth_paths, strict=True):
+        rgb = cv2.imread(str(rgb_path), cv2.IMREAD_UNCHANGED)
+        depth = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
+        if rgb is None or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3:
+            raise ValueError(f"Invalid target RGB image: {rgb_path}")
+        if depth is None or depth.dtype != np.uint16 or depth.ndim != 2:
+            raise ValueError(f"Invalid target depth image: {depth_path}")
+        if rgb.shape[:2] != depth.shape:
+            raise ValueError(f"Target RGB/Depth dimensions differ at {rgb_path.name}")
     validate_semantic_pointcloud(pointcloud_path)
     return {
-        "frame_count": len(rgb_paths),
-        "parquet": str(parquet_paths[0]),
+        "episode_count": len(episodes),
+        "total_frame_count": len(rgb_paths),
         "rgb_count": len(rgb_paths),
         "depth_count": len(depth_paths),
         "pointcloud": str(pointcloud_path),
+        "episodes": episodes,
     }
 
 
 def run_package_dataset(config: DatasetBuildConfig) -> Path:
-    camera = load_camera_trajectory(
-        config.paths.camera_trajectory_path, config.paths.camera_manifest_path
+    batch = load_trajectory_batch(
+        config.paths.trajectory_manifest,
+        config.paths.episodes_dir,
     )
-    render_dir = config.paths.rendered_episode_dir
-    render_manifest_path = render_dir / "render_manifest.json"
-    render_manifest = _load_render_manifest(render_manifest_path)
-    count = camera.frame_count
-    if int(render_manifest["frame_count"]) != count:
-        raise ValueError("Camera and render manifests have different frame counts")
-    if render_manifest["depth_units_per_meter"] != DEPTH_UNITS_PER_METER:
-        raise ValueError("Rendered depth unit does not match target_data.md")
-    if render_manifest["invalid_depth_value"] != INVALID_DEPTH_VALUE:
-        raise ValueError("Rendered invalid depth value does not match target_data.md")
-    if render_manifest["camera_trajectory_npz_sha256"] != file_sha256(
-        config.paths.camera_trajectory_path
-    ):
-        raise ValueError("Rendered images do not match the current camera trajectory NPZ")
-    if render_manifest["camera_trajectory_manifest_sha256"] != file_sha256(
-        config.paths.camera_manifest_path
-    ):
-        raise ValueError("Rendered images do not match the current camera trajectory manifest")
-    intrinsic = np.asarray(render_manifest["camera_intrinsic"], dtype=np.float64)
-    if intrinsic.size != 9 or not np.isfinite(intrinsic).all():
-        raise ValueError("Render manifest camera_intrinsic must contain 9 finite values")
-    intrinsic = intrinsic.reshape(3, 3)
+    _validate_pointcloud_binding(config, batch)
+    artifacts = tuple(_load_episode_artifacts(batch, episode) for episode in batch.episodes)
     base_extrinsic = np.asarray(
         config.trajectory_to_camera.base_extrinsic, dtype=np.float64
     ).reshape(4, 4)
     if not np.isfinite(base_extrinsic).all():
         raise ValueError("Configured base_extrinsic must be finite")
-    rgb_sources, depth_sources = _validate_source_images(render_dir, render_manifest)
-    validate_semantic_pointcloud(config.paths.semantic_pointcloud_path)
 
     scene_dir = config.scene_dir
     scene_parent = scene_dir.parent
@@ -234,33 +353,63 @@ def run_package_dataset(config: DatasetBuildConfig) -> Path:
         meta_dir = staging / "meta"
         for directory in (data_dir, rgb_dir, depth_dir, meta_dir):
             directory.mkdir(parents=True, exist_ok=True)
-        digits = max(3, len(str(count - 1)))
-        for frame_index, (rgb_source, depth_source) in enumerate(
-            zip(rgb_sources, depth_sources, strict=True)
-        ):
-            name = f"{frame_index:0{digits}d}.png"
-            shutil.copy2(rgb_source, rgb_dir / name)
-            shutil.copy2(depth_source, depth_dir / name)
-        parquet_path = data_dir / f"{EPISODE_NAME}.parquet"
-        _write_episode_parquet(parquet_path, camera.camera_to_world, intrinsic, base_extrinsic)
+
+        total_frames = sum(item.camera.frame_count for item in artifacts)
+        frame_digits = max(6, len(str(total_frames - 1)))
+        stats_lines = []
+        manifest_episodes = []
+        global_index = 0
+        for item in artifacts:
+            start = global_index
+            for rgb_source, depth_source in zip(item.rgb_paths, item.depth_paths, strict=True):
+                name = f"{global_index:0{frame_digits}d}.png"
+                shutil.copy2(rgb_source, rgb_dir / name)
+                shutil.copy2(depth_source, depth_dir / name)
+                global_index += 1
+            end = global_index - 1
+            parquet_path = data_dir / f"{item.spec.episode_name}.parquet"
+            _write_episode_parquet(
+                parquet_path,
+                item.camera.camera_to_world,
+                item.intrinsic,
+                base_extrinsic,
+            )
+            image_index = {"min": start, "max": end}
+            stats_lines.append(json.dumps({"image_index": image_index}, separators=(",", ":")))
+            manifest_episodes.append(
+                {
+                    "episode_index": item.spec.episode_index,
+                    "episode_name": item.spec.episode_name,
+                    "trajectory_id": item.spec.trajectory_id,
+                    "trajectory_sha256": item.spec.trajectory_sha256,
+                    "frame_count": item.camera.frame_count,
+                    "image_index": image_index,
+                    "parquet": parquet_path.relative_to(staging).as_posix(),
+                    "render_manifest_sha256": file_sha256(item.spec.paths.render_manifest_path),
+                }
+            )
         (meta_dir / "episodes_stats.jsonl").write_text(
-            json.dumps({"image_index": {"min": 0, "max": count - 1}}, separators=(",", ":")) + "\n",
+            "\n".join(stats_lines) + "\n",
             encoding="utf-8",
         )
         shutil.copy2(config.paths.semantic_pointcloud_path, meta_dir / "pointcloud.ply")
         run_manifest = {
-            "contract_version": CONTRACT_VERSION,
-            "frame_count": count,
-            "chunk_name": CHUNK_NAME,
-            "episode_name": EPISODE_NAME,
-            "inputs": {
-                "camera_trajectory": str(config.paths.camera_trajectory_path),
-                "camera_trajectory_sha256": file_sha256(config.paths.camera_trajectory_path),
-                "render_manifest": str(render_manifest_path),
-                "render_manifest_sha256": file_sha256(render_manifest_path),
-                "semantic_pointcloud": str(config.paths.semantic_pointcloud_path),
-                "semantic_pointcloud_sha256": file_sha256(config.paths.semantic_pointcloud_path),
+            "contract_version": 2,
+            "trajectory_batch": {
+                "path": str(batch.manifest_path),
+                "sha256": batch.manifest_sha256,
+                "source_scene_model_sha256": batch.source_scene_model_sha256,
             },
+            "semantic_pointcloud": {
+                "path": str(config.paths.semantic_pointcloud_path),
+                "sha256": file_sha256(config.paths.semantic_pointcloud_path),
+                "report_path": str(config.paths.semantic_pointcloud_report_path),
+                "report_sha256": file_sha256(config.paths.semantic_pointcloud_report_path),
+            },
+            "episode_count": len(artifacts),
+            "total_frame_count": total_frames,
+            "chunk_name": CHUNK_NAME,
+            "episodes": manifest_episodes,
             "dataset": {
                 "group_dir": config.dataset.group_dir,
                 "scene_dir": config.dataset.scene_dir,
@@ -285,7 +434,9 @@ def run_package_dataset(config: DatasetBuildConfig) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Package camera and RGB-D files as target data.")
+    parser = argparse.ArgumentParser(
+        description="Package all manifest episodes as one target dataset scene."
+    )
     parser.add_argument("--config", default="dataset_build.toml")
     return parser.parse_args()
 
