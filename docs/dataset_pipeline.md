@@ -88,7 +88,7 @@ outputs/dataset_build/
 ### 1. route → camera
 
 ```bash
-uv run robotnav-trajectory-to-camera --config dataset_build.toml
+uv run trajectory-to-camera --config dataset_build.toml
 ```
 
 程序按 manifest 顺序遍历 route，复用同一个 `build_camera_trajectory()` 姿态算法，为每条
@@ -106,7 +106,7 @@ JSON 记录 route SHA、batch manifest SHA、scene model SHA、轨迹 ID、episo
 ### 2. camera → RGB-D
 
 ```bash
-uv run robotnav-render-trajectory \
+uv run render-trajectory \
   --config dataset_build.toml \
   --render-config render.toml
 ```
@@ -122,7 +122,7 @@ RGB 固定为 uint8，Depth 固定为 uint16、`10000 units/m`、无效值 0。
 ### 3. 多 episode → target scene
 
 ```bash
-uv run robotnav-package-dataset --config dataset_build.toml
+uv run package-dataset --config dataset_build.toml
 ```
 
 打包器先校验全部 episode，再在 scene 同级 staging 目录中生成完整数据。最终图片在 scene
@@ -167,7 +167,7 @@ episode 001: 本地 000..079 -> 全局 000100..000179
 ## 最终验证
 
 ```bash
-uv run robotnav-validate-dataset data/target/robotnav/scene-000
+uv run validate-dataset data/target/robotnav/scene-000
 ```
 
 验证器不依赖构建时的上游文件，直接检查最终目录：
@@ -186,7 +186,7 @@ uv run robotnav-validate-dataset data/target/robotnav/scene-000
 以下命令按文件边界顺序执行三个阶段：
 
 ```bash
-uv run robotnav-build-dataset \
+uv run build-dataset \
   --config dataset_build.toml \
   --render-config render.toml
 ```

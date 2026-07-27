@@ -9,14 +9,14 @@
 ```bash
 uv sync
 uv sync --extra gpu
-uv run robotnav-env-check
+uv run env-check
 ```
 
 环境检查是运行渲染和轨迹生成前的第一步，会检查 Python 依赖、CUDA、gsplat 后端和项目模块。
 
 ## 数据和输出
 
-输入文件放在：
+输入文件默认设置放在`data/input/`目录，例如：
 
 ```text
 data/input/
@@ -24,53 +24,42 @@ data/input/
 └── try1_yup.ply
 ```
 
-运行结果统一写入：
+运行中间结果默认写入 `outputs/`下子目录中。
 
-```text
-outputs/render/
-outputs/navigation_scene/
-outputs/trajectories/
-outputs/semantic_pointcloud/
-outputs/dataset_build/
-```
+最终生成的数据集默认生成在`data/target/robotnav/`中。
 
 大体积点云和生成结果不提交到 Git。
 
 ## 常用命令
 
+### 准备工作：
+
+准备导航需要的数据与轨迹：
+
 ```bash
-uv run robotnav-render
-uv run robotnav-compare
-uv run robotnav-build-scene --config navigation_scene.toml
-uv run robotnav-generate-trajectories --config trajectories.toml
-uv run robotnav-export-pointcloud --config pointcloud_export.toml
+uv run prepare-navigation-data
 ```
 
-也可以用一个薄编排入口顺序执行三个阶段：
+也可以分为三个阶段运行：
 
 ```bash
-uv run robotnav-prepare-navigation-data \
-  --scene-config navigation_scene.toml \
-  --trajectory-config trajectories.toml \
-  --pointcloud-config pointcloud_export.toml
+uv run build-scene            # 场景构建
+uv run generate-trajectories  # 轨迹生成
+uv run export-pointcloud      # 语义点云导出
 ```
 
 场景构建、轨迹生成和 PLY 导出拥有各自的配置与输出目录。修改 A* 或批量参数只需重跑轨迹；
 修改颜色或体素参数只需重跑 PLY。轨迹批次由
 `outputs/trajectories/trajectory_manifest.json` 索引。
 
-## 目标数据集构建
+### 目标数据集构建
 
-`configs/dataset_build.toml` 读取完整的
-`outputs/trajectories/trajectory_manifest.json`。manifest 中每条轨迹会生成一个独立
-episode；所有 episode 最终打包进同一个 scene，共享一份语义点云。
-
-三个阶段通过版本化文件交付，可以独立执行：
+数据集构建分为将轨迹转化成相机位姿、用相机位姿渲染rgb图和深度图、打包数据三个阶段。三个阶段通过版本化文件交付，可以独立执行：
 
 ```bash
-uv run robotnav-trajectory-to-camera --config dataset_build.toml
-uv run robotnav-render-trajectory --config dataset_build.toml --render-config render.toml
-uv run robotnav-package-dataset --config dataset_build.toml
+uv run trajectory-to-camera
+uv run render-trajectory
+uv run package-dataset
 ```
 
 中间产物按轨迹 ID 隔离：
@@ -88,7 +77,7 @@ outputs/dataset_build/episodes/<trajectory_id>/
 也可以顺序执行全部阶段：
 
 ```bash
-uv run robotnav-build-dataset --config dataset_build.toml --render-config render.toml
+uv run build-dataset --config dataset_build.toml --render-config render.toml
 ```
 
 最终 scene 包含多个按顺序命名的 parquet，RGB/Depth 使用跨 episode 的连续全局编号，
@@ -98,10 +87,10 @@ uv run robotnav-build-dataset --config dataset_build.toml --render-config render
 以下命令可独立验证最终 scene：
 
 ```bash
-uv run robotnav-validate-dataset data/target/robotnav/scene-000
+uv run validate-dataset data/target/robotnav/scene-000
 ```
 
-## 静态检查
+### 静态检查
 
 ```bash
 uv run ruff check .

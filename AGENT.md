@@ -36,7 +36,7 @@
 ## 验证
 
 ```bash
-uv run robotnav-env-check
+uv run env-check
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
@@ -46,15 +46,15 @@ uv run pytest -q
 
 Navigation 已从单体轨迹入口拆为三个可独立执行的阶段：
 
-1. `robotnav-build-scene --config navigation_scene.toml`：LAS →
+1. `build-scene --config navigation_scene.toml`：LAS →
    `outputs/navigation_scene/scene_model.npz` 与 `scene_manifest.json`；
-2. `robotnav-generate-trajectories --config trajectories.toml`：场景产物 →
+2. `generate-trajectories --config trajectories.toml`：场景产物 →
    `outputs/trajectories/routes/*.json` 与 `trajectory_manifest.json`；
-3. `robotnav-export-pointcloud --config pointcloud_export.toml`：LAS + 场景产物 →
+3. `export-pointcloud --config pointcloud_export.toml`：LAS + 场景产物 →
    `outputs/semantic_pointcloud/pointcloud.ply` 与报告。
 
-`robotnav-prepare-navigation-data` 只是顺序调用以上公开阶段的便利编排器，禁止在其中维护
-另一套算法。旧 `robotnav-trajectory` 和 `configs/trajectory.toml` 已移除。
+`prepare-navigation-data` 只是顺序调用以上公开阶段的便利编排器，禁止在其中维护
+另一套算法。旧 `trajectory` 和 `configs/trajectory.toml` 已移除。
 
 所有下游必须通过 `load_scene_artifact()` 同时加载 NPZ 和 manifest，不能绕过哈希校验直接读取
 `scene_model.npz`。PLY 导出还必须校验当前 LAS 与 scene manifest 中的大小和 SHA-256 一致。

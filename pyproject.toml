@@ -27,19 +27,19 @@ dev = [
 ]
 
 [project.scripts]
-robotnav-env-check = "robotnav.env_check:main"
-robotnav-render = "robotnav.rendering.render_one_view:render_batch"
-robotnav-depth = "robotnav.rendering.depth_render:main"
-robotnav-compare = "robotnav.rendering.compare_render:main"
-robotnav-build-scene = "robotnav.commands.build_navigation_scene:main"
-robotnav-generate-trajectories = "robotnav.commands.generate_trajectories:main"
-robotnav-export-pointcloud = "robotnav.commands.export_semantic_pointcloud:main"
-robotnav-prepare-navigation-data = "robotnav.commands.prepare_navigation_data:main"
-robotnav-trajectory-to-camera = "robotnav.dataset.trajectory_to_camera:main"
-robotnav-render-trajectory = "robotnav.dataset.render_trajectory:main"
-robotnav-package-dataset = "robotnav.dataset.package_dataset:main"
-robotnav-build-dataset = "robotnav.dataset.build_dataset:main"
-robotnav-validate-dataset = "robotnav.dataset.validate_dataset:main"
+env-check = "robotnav.env_check:main"
+render = "robotnav.rendering.render_one_view:render_batch"
+depth = "robotnav.rendering.depth_render:main"
+compare = "robotnav.rendering.compare_render:main"
+build-scene = "robotnav.commands.build_navigation_scene:main"
+generate-trajectories = "robotnav.commands.generate_trajectories:main"
+export-pointcloud = "robotnav.commands.export_semantic_pointcloud:main"
+prepare-navigation-data = "robotnav.commands.prepare_navigation_data:main"
+trajectory-to-camera = "robotnav.dataset.trajectory_to_camera:main"
+render-trajectory = "robotnav.dataset.render_trajectory:main"
+package-dataset = "robotnav.dataset.package_dataset:main"
+build-dataset = "robotnav.dataset.build_dataset:main"
+validate-dataset = "robotnav.dataset.validate_dataset:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -177,7 +177,7 @@ def build_scene(config: SceneBuildConfig) -> SceneArtifact:
     )
     manifest = {
         "contract_version": SCENE_ARTIFACT_CONTRACT_VERSION,
-        "producer": "robotnav-build-scene",
+        "producer": "build-scene",
         "source_las": source_file_record(las_path),
         "scene_model": SCENE_MODEL_FILENAME,
         "scene_model_sha256": file_sha256(model_path),
