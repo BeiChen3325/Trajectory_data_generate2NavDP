@@ -62,14 +62,13 @@ Navigation 已从单体轨迹入口拆为三个可独立执行的阶段：
 
 ## 数据集与 trajectory→img 衔接
 
-现有数据集流水线仍是单 episode：`configs/dataset_build.toml` 默认选择
-`outputs/trajectories/routes/auto_000.json`，语义点云来自独立目录
-`outputs/semantic_pointcloud/`。route JSON 保持 `floor_y`、`smooth_path_xz` 和
-`coordinate_convention` 字段，因此现有相机转换可以复用。
+数据集流水线从 `trajectory_manifest.json` 枚举全部轨迹，每个 `trajectory_id` 使用独立
+工作目录。加载时必须校验 route SHA-256 与 scene SHA；相机、渲染 manifest 继续把上游哈希
+向下传递。批量层不得复制相机姿态或 gsplat 算法。
 
-后续多 episode 改造必须从 `trajectory_manifest.json` 枚举轨迹，为每个 `trajectory_id` 使用独立
-工作目录，并校验每条 `trajectory_sha256`。不得为批处理复制相机姿态或渲染算法。实施边界、配置
-建议和验收项见 `docs/trajectory_to_img_migration_guide.md`。
+一个 trajectory manifest 对应一个 target scene，每条 route 对应一个 parquet episode。
+RGB/Depth 在最终 scene 内使用连续全局编号，`episodes_stats.jsonl` 的行序必须与排序后的
+parquet 一致。具体契约见 `docs/dataset_pipeline.md` 和 `docs/target_data.md`。
 
 ## 障碍模型约定
 
@@ -86,14 +85,5 @@ Navigation 已从单体轨迹入口拆为三个可独立执行的阶段：
 - 当前内部坐标为 Y-up 表达，但物理向下是 `+Y`，离地高度统一计算为
   `floor_y - y`。不得对语义点云单独居中、归一化或缩放。
 
-详细设计和验收规则见 `docs/pointcloud_plan.md`。
-
-## 当前验证结果与下一步
-
-- Navigation 的合成测试覆盖同一 seed 稳定生成 8 条不同端点轨迹、显式重复任务失败和配置校验；
-- 2026-07-27 已通过真实 LAS 三阶段烟雾测试、场景/轨迹/PLY 哈希链校验、12 个单元测试、
-  全仓 Ruff 格式与 lint、`ty check`；现有 trajectory-to-camera 成功读取 `auto_000.json`
-  并生成 116 个相机位姿；
-- 既有 RGB-D manifest 绑定的是旧 `trajectory.json` 哈希。正式打包前必须重新运行轨迹到相机、
-  RGB-D 渲染和打包阶段，不能复用旧 manifest 绕过哈希完整性检查；
-- 多 episode trajectory→img 尚未实现；改造时遵循上述指引。
+语义点云 report 必须记录 scene model SHA 和生成的 PLY SHA。打包前要同时校验
+trajectory manifest、pointcloud report 与当前 PLY，不能复用旧产物绕过完整性检查。

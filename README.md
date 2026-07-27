@@ -31,6 +31,7 @@ outputs/render/
 outputs/navigation_scene/
 outputs/trajectories/
 outputs/semantic_pointcloud/
+outputs/dataset_build/
 ```
 
 大体积点云和生成结果不提交到 Git。
@@ -60,14 +61,28 @@ uv run robotnav-prepare-navigation-data \
 
 ## 目标数据集构建
 
-`configs/dataset_build.toml` 当前明确选择批次中的一条轨迹（默认 `auto_000.json`），并引用
-独立生成的语义点云、工作目录和目标 scene。
-三个阶段通过版本化文件交付，可独立执行：
+`configs/dataset_build.toml` 读取完整的
+`outputs/trajectories/trajectory_manifest.json`。manifest 中每条轨迹会生成一个独立
+episode；所有 episode 最终打包进同一个 scene，共享一份语义点云。
+
+三个阶段通过版本化文件交付，可以独立执行：
 
 ```bash
 uv run robotnav-trajectory-to-camera --config dataset_build.toml
 uv run robotnav-render-trajectory --config dataset_build.toml --render-config render.toml
 uv run robotnav-package-dataset --config dataset_build.toml
+```
+
+中间产物按轨迹 ID 隔离：
+
+```text
+outputs/dataset_build/episodes/<trajectory_id>/
+├── camera_trajectory.npz
+├── camera_trajectory.json
+└── rendered_episode/
+    ├── rgb/
+    ├── depth/
+    └── render_manifest.json
 ```
 
 也可以顺序执行全部阶段：
@@ -76,7 +91,11 @@ uv run robotnav-package-dataset --config dataset_build.toml
 uv run robotnav-build-dataset --config dataset_build.toml --render-config render.toml
 ```
 
-语义点云默认位于 `outputs/semantic_pointcloud/pointcloud.ply`。以下命令可单独验证最终 scene：
+最终 scene 包含多个按顺序命名的 parquet，RGB/Depth 使用跨 episode 的连续全局编号，
+`episodes_stats.jsonl` 记录每个 episode 的图片闭区间。语义点云默认位于
+`outputs/semantic_pointcloud/pointcloud.ply`。
+
+以下命令可独立验证最终 scene：
 
 ```bash
 uv run robotnav-validate-dataset data/target/robotnav/scene-000
@@ -92,3 +111,6 @@ uv run ty check
 
 源码位于 `src/robotnav/`。导航职责进一步分为 `navigation/scene/`、
 `navigation/trajectory/` 和 `navigation/semantic_pointcloud/`，CLI 位于 `commands/`。
+目标数据集契约与多 episode 映射详见
+[`docs/target_data.md`](docs/target_data.md) 和
+[`docs/dataset_pipeline.md`](docs/dataset_pipeline.md)。
