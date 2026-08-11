@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from robotnav.config import CONFIG_DIR, PROJECT_ROOT, ConfigurationError, load_toml
 
 
@@ -37,8 +39,11 @@ class DatasetBuildPaths:
 
 @dataclass(frozen=True)
 class TrajectoryToCameraConfig:
-    height_above_floor_m: float
-    base_extrinsic: tuple[float, ...]
+    camera_pose_resource: str
+    base_height_above_floor_m: float
+    camera_frame: str
+    base_from_camera_link_translation_m: tuple[float, float, float]
+    base_from_camera_link_rpy_deg: tuple[float, float, float]
 
 
 @dataclass(frozen=True)
@@ -96,6 +101,72 @@ def _safe_component(value: Any, field: str) -> str:
     return value
 
 
+def _triple(value: Any, field: str) -> tuple[float, float, float]:
+    if (
+        not isinstance(value, list)
+        or len(value) != 3
+        or not all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in value)
+    ):
+        raise ConfigurationError(f"{field} must contain exactly three numbers")
+    return (float(value[0]), float(value[1]), float(value[2]))
+
+
+def _load_camera_pose_resource(resource_ref: Any) -> TrajectoryToCameraConfig:
+    """Resolve one Go2 camera-pose record from camera_resource.
+
+    The TOML stores only this reference.  The camera height and external pose
+    must not be duplicated in dataset_build.toml, where they could drift from
+    the selected camera resource.
+    """
+    field = "[trajectory_to_camera].camera_pose_resource"
+    if not isinstance(resource_ref, str) or not resource_ref:
+        raise ConfigurationError(f"{field} must be a non-empty resource reference")
+    resource_name, separator, fragment = resource_ref.partition("#")
+    if not separator or not resource_name or not fragment:
+        raise ConfigurationError(f"{field} must have the form path.yaml#mapping.path")
+    resource_path = _project_path(resource_name, field)
+    resource_root = PROJECT_ROOT / "src" / "camera_resource"
+    if not resource_path.is_relative_to(resource_root):
+        raise ConfigurationError(f"{field} must refer to a file below {resource_root}")
+    if resource_path.suffix not in {".yaml", ".yml"}:
+        raise ConfigurationError(f"{field} must refer to a YAML camera resource")
+    try:
+        with resource_path.open(encoding="utf-8") as handle:
+            resource_data = yaml.safe_load(handle)
+    except OSError as error:
+        raise ConfigurationError(f"Cannot read Go2 camera resource {resource_path}: {error}") from error
+    except yaml.YAMLError as error:
+        raise ConfigurationError(f"Invalid YAML in Go2 camera resource {resource_path}: {error}") from error
+
+    record: Any = resource_data
+    for component in fragment.split("."):
+        if not component or not isinstance(record, dict) or component not in record:
+            raise ConfigurationError(f"{field} cannot resolve #{fragment} in {resource_path}")
+        record = record[component]
+    if not isinstance(record, dict):
+        raise ConfigurationError(f"{field} #{fragment} must resolve to a mapping")
+    expected = {"camera_frame", "base_height_above_floor_m", "position_m", "rpy_deg"}
+    if set(record) != expected:
+        raise ConfigurationError(
+            f"{field} #{fragment} must contain exactly: {', '.join(sorted(expected))}"
+        )
+    camera_frame = record["camera_frame"]
+    if not isinstance(camera_frame, str) or not camera_frame:
+        raise ConfigurationError(f"{field} #{fragment}.camera_frame must be a non-empty string")
+    base_height = record["base_height_above_floor_m"]
+    if not isinstance(base_height, (int, float)) or isinstance(base_height, bool) or base_height <= 0:
+        raise ConfigurationError(f"{field} #{fragment}.base_height_above_floor_m must be positive")
+    return TrajectoryToCameraConfig(
+        camera_pose_resource=resource_ref,
+        base_height_above_floor_m=float(base_height),
+        camera_frame=camera_frame,
+        base_from_camera_link_translation_m=_triple(
+            record["position_m"], f"{field} #{fragment}.position_m"
+        ),
+        base_from_camera_link_rpy_deg=_triple(record["rpy_deg"], f"{field} #{fragment}.rpy_deg"),
+    )
+
+
 def load_dataset_build_config(filename: str = "dataset_build.toml") -> DatasetBuildConfig:
     """Load the configuration shared by all three file-based dataset stages."""
     config_path = CONFIG_DIR / filename
@@ -145,17 +216,12 @@ def load_dataset_build_config(filename: str = "dataset_build.toml") -> DatasetBu
         dataset_root=_project_path(path_values["dataset_root"], "[paths].dataset_root"),
     )
 
-    camera_values = _table(raw, "trajectory_to_camera", {"height_above_floor_m", "base_extrinsic"})
-    height = camera_values["height_above_floor_m"]
-    base_extrinsic = camera_values["base_extrinsic"]
-    if not isinstance(height, (int, float)) or height <= 0:
-        raise ConfigurationError("[trajectory_to_camera].height_above_floor_m must be positive")
-    if (
-        not isinstance(base_extrinsic, list)
-        or len(base_extrinsic) != 16
-        or not all(isinstance(value, (int, float)) for value in base_extrinsic)
-    ):
-        raise ConfigurationError("[trajectory_to_camera].base_extrinsic must contain 16 numbers")
+    camera_values = _table(
+        raw,
+        "trajectory_to_camera",
+        {"camera_pose_resource"},
+    )
+    trajectory_to_camera = _load_camera_pose_resource(camera_values["camera_pose_resource"])
 
     rendering_values = _table(raw, "rendering", {"camera_batch_size"})
     batch_size = rendering_values["camera_batch_size"]
@@ -168,10 +234,7 @@ def load_dataset_build_config(filename: str = "dataset_build.toml") -> DatasetBu
 
     return DatasetBuildConfig(
         paths=paths,
-        trajectory_to_camera=TrajectoryToCameraConfig(
-            height_above_floor_m=float(height),
-            base_extrinsic=tuple(float(value) for value in base_extrinsic),
-        ),
+        trajectory_to_camera=trajectory_to_camera,
         rendering=EpisodeRenderingConfig(camera_batch_size=batch_size),
         dataset=DatasetOutputConfig(
             group_dir=_safe_component(dataset_values["group_dir"], "[dataset].group_dir"),

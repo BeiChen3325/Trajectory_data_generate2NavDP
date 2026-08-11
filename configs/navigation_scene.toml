@@ -1,31 +1,59 @@
 [paths]
 data_dir = "data/input"
-las_filename = "try1-pointcloud-0706.las"
-output_dir = "outputs/navigation_scene"
+las_filename = "forth_local.las"
+output_dir = "outputs/forth_local/navigation_scene"
 
 [scene]
+# 输入点云坐标系转换："zup-to-yup" 按 [X,Y,Z] -> [X,-Z,Y] 转到项目 world（+Y 物理向下）；"none" 表示不转换。
 axis_transform = "zup-to-yup"
+# 地面在项目 world 坐标中的 Y 值；"auto" 表示由点云自动估计，也可填写数值手动指定。
 floor_y_override = "auto"
+# 默认使用完整 LAS header bounds 生成 global navigation map。true 仅用于调试性局部裁剪。
+enable_roi_crop = false
+# 调试 ROI 的中心 [x, z]（米）。enable_roi_crop=false 时会被忽略。
 roi_center_xz = [0.0, 0.0]
+# 调试 ROI 的 [宽度, 深度]（米）；enable_roi_crop=true 时必须与中心同时设置。
 roi_size_xz = [12.0, 12.0]
+# 自动估计地面时参与搜索的最小 Y 坐标（项目 world，+Y 物理向下，单位米）。
 floor_search_y_min = 0.0
+# 自动估计地面时参与搜索的最大 Y 坐标（项目 world，+Y 物理向下，单位米）。
 floor_search_y_max = 3.0
+# 二维导航栅格每个单元的边长（米）；越小越精细，但内存和计算量越大。
 resolution_m = 0.08
+# 判定地面点时，距 floor_y 的允许垂直偏差（米）。
 ground_band_m = 0.08
+# 一个栅格至少包含多少处障碍高度带内的点，才初步视为障碍。
 min_points_per_cell = 2
+# 一个栅格至少包含多少处地面带内的点，才初步视为可通行地面。
 min_ground_points_per_cell = 2
+# 障碍图开运算的核半径（单位：栅格）；0 表示不做，用于去除小型噪点。
 open_kernel_cells = 1
+# 障碍图闭运算的核半径（单位：栅格）；0 表示不做，用于填补障碍物中的小孔洞。
 close_kernel_cells = 2
+# 清理后保留障碍连通域所需的最小栅格数量；更小的连通域会被当作噪声移除。
 min_obstacle_component_cells = 8
+# 地面掩膜闭运算的核半径（单位：栅格）；用于填补地面观测中的小空洞。
 ground_close_kernel_cells = 2
+# 每次从 LAS 文件读取的点数；影响流式处理的内存占用与吞吐。
 chunk_size = 1000000
+# 最多处理的 LAS 点数；0 表示不设上限，使用全部点云。
 max_stream_points = 0
+# 自动估计地面时最多抽样的点数；用于限制地面估计的内存和时间。
 floor_sample_limit = 1200000
+# 地面高度直方图的分箱数量；越大，高度估计分辨率越高。
 floor_hist_bins = 180
+# 估计地面空间覆盖度时，XZ 平面统计网格的分辨率（米）。
 floor_xy_resolution_m = 0.25
 
 [robot]
-radius_m = 0.25
-height_m = 0.8
+# Unitree Go2 的保守圆形足迹半径（米）；用于对真实障碍物做膨胀。
+# URDF 的前后髋关节偏置为 0.1934 m、腿部横向偏置为 0.0955 m；
+# URDF 未给出行走时的固定关节姿态，因此以 0.30 m 覆盖其标称站立包络。
+radius_m = 0.30
+# Unitree Go2 的保守碰撞高度（米）；地面以上此高度范围内的点会参与障碍物判定。
+# 0.65 m 覆盖 URDF 的两段 0.213 m 腿长、0.114 m 躯干碰撞盒，以及站立姿态余量。
+height_m = 0.65
+# 障碍高度带的下边界（米）；低于此离地高度的点不作为碰撞障碍物。
 ground_margin_m = 0.06
+# 在机器人半径之外额外预留的安全距离（米）；同样参与障碍膨胀。
 safety_margin_m = 0.10

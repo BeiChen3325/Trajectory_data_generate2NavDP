@@ -11,6 +11,7 @@ dependencies = [
     "pyarrow",
     "plyfile",
     "tomli>=2.0",
+    "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +19,7 @@ gpu = [
     "torch>=2.1",
     "gsplat>=1.5",
     "packaging",
+    "cuda-toolkit[cccl,nvcc]==13.0.3.0",
 ]
 dev = [
     "ipython",
@@ -28,11 +30,14 @@ dev = [
 
 [project.scripts]
 env-check = "robotnav.env_check:main"
+check-gpu-environment = "robotnav.gpu_environment:main"
 render = "robotnav.rendering.render_one_view:render_batch"
 depth = "robotnav.rendering.depth_render:main"
 compare = "robotnav.rendering.compare_render:main"
 build-scene = "robotnav.commands.build_navigation_scene:main"
+validate-scene-alignment = "robotnav.commands.validate_scene_alignment:main"
 generate-trajectories = "robotnav.commands.generate_trajectories:main"
+annotate-valid-region = "robotnav.commands.annotate_valid_region:main"
 export-pointcloud = "robotnav.commands.export_semantic_pointcloud:main"
 prepare-navigation-data = "robotnav.commands.prepare_navigation_data:main"
 trajectory-to-camera = "robotnav.dataset.trajectory_to_camera:main"
@@ -40,6 +45,8 @@ render-trajectory = "robotnav.dataset.render_trajectory:main"
 package-dataset = "robotnav.dataset.package_dataset:main"
 build-dataset = "robotnav.dataset.build_dataset:main"
 validate-dataset = "robotnav.dataset.validate_dataset:main"
+convert-navdp-dataset = "robotnav.tools.convert_to_navdp_dataset:main"
+navdp-loader-test = "robotnav.tools.test_navdp_loader:main"
 
 [build-system]
 requires = ["hatchling"]

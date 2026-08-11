@@ -1,8 +1,8 @@
 [paths]
 data_dir = "data/input"
-las_filename = "try1-pointcloud-0706.las"
-scene_dir = "outputs/navigation_scene"
-output_dir = "outputs/semantic_pointcloud"
+las_filename = "forth_local.las"
+scene_dir = "outputs/forth_local/navigation_scene"
+output_dir = "outputs/forth_local/semantic_pointcloud"
 
 [pointcloud]
 filename = "pointcloud.ply"

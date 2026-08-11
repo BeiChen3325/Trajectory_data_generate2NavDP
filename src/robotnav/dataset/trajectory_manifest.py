@@ -12,7 +12,7 @@ import numpy as np
 
 from robotnav.dataset.contracts import file_sha256
 
-TRAJECTORY_MANIFEST_CONTRACT_VERSION = 1
+TRAJECTORY_MANIFEST_CONTRACT_VERSION = 2
 SAFE_TRAJECTORY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
@@ -112,6 +112,7 @@ def _load_route(
         "trajectory_id",
         "source_scene_model_sha256",
         "floor_y",
+        "robot_ground_pose",
         "smooth_path_xz",
         "coordinate_convention",
     ):
@@ -130,6 +131,13 @@ def _load_route(
     coordinate_convention = route["coordinate_convention"]
     if not isinstance(coordinate_convention, str) or not coordinate_convention:
         raise ValueError(f"Trajectory {trajectory_id!r} has no coordinate convention")
+    ground_pose = route["robot_ground_pose"]
+    if not isinstance(ground_pose, dict):
+        raise ValueError(f"Trajectory {trajectory_id!r} robot_ground_pose must be an object")
+    if ground_pose.get("frame") != "ground" or ground_pose.get("origin_y") != floor_y:
+        raise ValueError(f"Trajectory {trajectory_id!r} has an invalid robot_ground_pose")
+    if not np.array_equal(np.asarray(ground_pose.get("path_xz"), dtype=np.float64), points_xz):
+        raise ValueError(f"Trajectory {trajectory_id!r} robot_ground_pose.path_xz must match smooth_path_xz")
     return EpisodeSpec(
         episode_index=episode_index,
         episode_name=f"{episode_index:0{episode_digits}d}",

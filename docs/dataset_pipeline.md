@@ -35,8 +35,9 @@ work_dir = "outputs/dataset_build"
 dataset_root = "data/target"
 ```
 
-轨迹数量、顺序和 route 路径只来自 trajectory manifest。3DGS PLY、图像宽高、FOV 和背景
-只来自 `render.toml`。LAS、场景构建和 A* 参数不属于数据集配置。
+轨迹数量、顺序和 route 路径只来自 trajectory manifest。3DGS PLY、图像宽高、完整相机内参
+和背景只来自 `render.toml`；`render.toml` 引用 `src/camera_resource` 中的标定 JSON。LAS、
+场景构建和 A* 参数不属于数据集配置。
 
 ## 输入校验
 
@@ -96,12 +97,16 @@ uv run trajectory-to-camera --config dataset_build.toml
 
 NPZ 包含：
 
-- `camera_to_world: (T,4,4)`，写入 parquet 的 `action`；
-- `world_to_camera: (T,4,4)`，交给 gsplat；
+- `T_world_ground: (T,4,4)`，路线地面投影 → world；
+- `T_world_base_link: (T,4,4)`，实际 Go2 base_link → world；
+- `T_base_from_camera: (4,4)`，静态 camera optical → base 外参；
+- `T_camera_from_base: (4,4)`，`inverse(T_base_from_camera)`；
+- `T_world_camera: (T,4,4)`，由 `T_world_base_link @ T_base_from_camera` 得到，并写入 parquet 的 `action`；
+- `T_camera_world: (T,4,4)`，`inverse(T_world_camera)`，直接交给 gsplat；
 - `frame_index: (T,)`，连续的 `0..T-1`。
 
-JSON 记录 route SHA、batch manifest SHA、scene model SHA、轨迹 ID、episode 序号、相机高度
-和坐标约定。
+JSON 记录 route SHA、batch manifest SHA、scene model SHA、轨迹 ID、episode 序号、相机安装
+来源、两方向相机外参和坐标约定。
 
 ### 2. camera → RGB-D
 
@@ -118,6 +123,10 @@ uv run render-trajectory \
 `rendered_episode`，因此轨迹变短时不会残留旧 PNG，也不会影响其他 episode。
 
 RGB 固定为 uint8，Depth 固定为 uint16、`10000 units/m`、无效值 0。
+两者都以 color 相机的 `K_color`、`T_camera_world` 和 `848×480` raster 渲染；render manifest
+记录并在打包时校验 `rgb_depth_alignment`，因此同一像素 `(u,v)` 描述同一条 color-camera 光线。
+这不是 D435i 原始 depth 图的重投影；若未来接入原始 Z16 depth，必须先使用设备标定的
+`depth_to_color` 变换重投影到 color 像素网格。
 
 ### 3. 多 episode → target scene
 

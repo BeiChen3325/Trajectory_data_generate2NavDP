@@ -60,6 +60,7 @@ def _load_render_manifest(path: Path) -> dict[str, Any]:
         "camera_intrinsic",
         "width",
         "height",
+        "rgb_depth_alignment",
         "rgb_paths",
         "depth_paths",
         "depth_units_per_meter",
@@ -150,18 +151,46 @@ def _validate_source_images(
 
 def _write_episode_parquet(
     path: Path,
-    camera_to_world: np.ndarray,
+    t_world_ground: np.ndarray,
+    t_world_base_link: np.ndarray,
+    t_world_camera: np.ndarray,
     intrinsic: np.ndarray,
-    base_extrinsic: np.ndarray,
+    t_base_from_camera: np.ndarray,
+    t_camera_from_base: np.ndarray,
+    timestamp_indices: np.ndarray,
 ) -> None:
-    count = camera_to_world.shape[0]
+    count = t_world_camera.shape[0]
+    if t_world_ground.shape != (count, 4, 4):
+        raise ValueError("T_world_ground must align with T_world_camera")
+    if t_world_base_link.shape != (count, 4, 4):
+        raise ValueError("T_world_base_link must align with T_world_camera")
+    if t_base_from_camera.shape != (4, 4) or t_camera_from_base.shape != (4, 4):
+        raise ValueError("Camera extrinsics must be static 4x4 matrices")
+    if timestamp_indices.shape != (count,):
+        raise ValueError("timestamp_indices must align with T_world_camera")
     intrinsic_values = intrinsic.reshape(-1).tolist()
-    extrinsic_values = base_extrinsic.reshape(-1).tolist()
+    t_base_from_camera_values = t_base_from_camera.reshape(-1).tolist()
+    t_camera_from_base_values = t_camera_from_base.reshape(-1).tolist()
     frame = pd.DataFrame(
         {
+            "timestamp_index": timestamp_indices.astype(np.int64),
             "observation.camera_intrinsic": [intrinsic_values.copy() for _ in range(count)],
-            "observation.camera_extrinsic": [extrinsic_values.copy() for _ in range(count)],
-            "action": [matrix.reshape(-1).tolist() for matrix in camera_to_world],
+            "observation.T_base_from_camera": [
+                t_base_from_camera_values.copy() for _ in range(count)
+            ],
+            "observation.T_camera_from_base": [
+                t_camera_from_base_values.copy() for _ in range(count)
+            ],
+            "observation.robot_ground_pose": [
+                matrix.reshape(-1).tolist() for matrix in t_world_ground
+            ],
+            "observation.robot_base_pose": [
+                matrix.reshape(-1).tolist() for matrix in t_world_base_link
+            ],
+            "observation.T_world_camera": [
+                matrix.reshape(-1).tolist() for matrix in t_world_camera
+            ],
+            "action": [matrix.reshape(-1).tolist() for matrix in t_world_camera],
         }
     )
     frame.to_parquet(path, engine="pyarrow", index=False)
@@ -203,6 +232,18 @@ def _load_episode_artifacts(
         raise ValueError("Rendered depth unit does not match target_data.md")
     if render_manifest["invalid_depth_value"] != INVALID_DEPTH_VALUE:
         raise ValueError("Rendered invalid depth value does not match target_data.md")
+    alignment = render_manifest["rgb_depth_alignment"]
+    expected_alignment = {
+        "pixel_coordinate_frame": "color",
+        "rgb_intrinsic": "K_color",
+        "depth_intrinsic": "K_color",
+        "view_transform": "T_camera_world",
+        "method": "same 3DGS projection",
+    }
+    if alignment != expected_alignment:
+        raise ValueError(
+            "Rendered RGB and depth do not declare the required color-camera alignment"
+        )
     intrinsic = np.asarray(render_manifest["camera_intrinsic"], dtype=np.float64)
     if intrinsic.size != 9 or not np.isfinite(intrinsic).all():
         raise ValueError("Render manifest camera_intrinsic must contain 9 finite values")
@@ -261,8 +302,13 @@ def validate_target_scene(scene_dir: Path) -> dict[str, Any]:
         raise ValueError("RGB and Depth file counts must be equal and non-zero")
 
     required_columns = {
+        "timestamp_index",
         "observation.camera_intrinsic",
-        "observation.camera_extrinsic",
+        "observation.T_base_from_camera",
+        "observation.T_camera_from_base",
+        "observation.robot_ground_pose",
+        "observation.robot_base_pose",
+        "observation.T_world_camera",
         "action",
     }
     expected_min = 0
@@ -291,12 +337,55 @@ def validate_target_scene(scene_dir: Path) -> dict[str, Any]:
         if len(frame) != frame_count:
             raise ValueError(f"Parquet row count does not match image range: {parquet_path}")
         intrinsic = np.asarray(frame["observation.camera_intrinsic"].tolist()[0]).reshape(3, 3)
-        extrinsic = np.asarray(frame["observation.camera_extrinsic"].tolist()[0]).reshape(4, 4)
+        t_base_from_camera = np.asarray(
+            frame["observation.T_base_from_camera"].tolist()[0]
+        ).reshape(4, 4)
+        t_camera_from_base = np.asarray(
+            frame["observation.T_camera_from_base"].tolist()[0]
+        ).reshape(4, 4)
+        t_world_ground = np.stack(frame["observation.robot_ground_pose"].to_numpy()).reshape(
+            -1, 4, 4
+        )
+        t_world_base_link = np.stack(frame["observation.robot_base_pose"].to_numpy()).reshape(
+            -1, 4, 4
+        )
+        t_world_camera = np.stack(frame["observation.T_world_camera"].to_numpy()).reshape(-1, 4, 4)
         actions = np.stack(frame["action"].to_numpy()).reshape(-1, 4, 4)
-        if not np.isfinite(intrinsic).all() or not np.isfinite(extrinsic).all():
+        timestamps = frame["timestamp_index"].to_numpy(dtype=np.int64)
+        if (
+            not np.isfinite(intrinsic).all()
+            or not np.isfinite(t_base_from_camera).all()
+            or not np.isfinite(t_camera_from_base).all()
+        ):
             raise ValueError(f"Parquet camera matrices must be finite: {parquet_path}")
-        if not np.isfinite(actions).all() or actions.shape[0] != frame_count:
-            raise ValueError(f"Parquet actions do not match image range: {parquet_path}")
+        if (
+            not np.isfinite(t_world_ground).all()
+            or not np.isfinite(t_world_base_link).all()
+            or not np.isfinite(t_world_camera).all()
+            or not np.isfinite(actions).all()
+            or actions.shape[0] != frame_count
+        ):
+            raise ValueError(f"Parquet poses do not match image range: {parquet_path}")
+        if not np.array_equal(timestamps, np.arange(minimum, maximum + 1, dtype=np.int64)):
+            raise ValueError(f"Parquet timestamps do not match image range: {parquet_path}")
+        if not np.allclose(
+            t_camera_from_base,
+            np.linalg.inv(t_base_from_camera),
+            atol=1e-5,
+        ):
+            raise ValueError(
+                f"T_camera_from_base is not inverse(T_base_from_camera): {parquet_path}"
+            )
+        if not np.allclose(
+            t_world_camera,
+            t_world_base_link @ t_base_from_camera[None, :, :],
+            atol=1e-5,
+        ):
+            raise ValueError(
+                f"T_world_camera does not match robot_base_pose and extrinsic: {parquet_path}"
+            )
+        if not np.allclose(actions, t_world_camera, atol=1e-5):
+            raise ValueError(f"Parquet action must equal T_world_camera: {parquet_path}")
         episodes.append(
             {
                 "episode_index": index,
@@ -336,12 +425,6 @@ def run_package_dataset(config: DatasetBuildConfig) -> Path:
     )
     _validate_pointcloud_binding(config, batch)
     artifacts = tuple(_load_episode_artifacts(batch, episode) for episode in batch.episodes)
-    base_extrinsic = np.asarray(
-        config.trajectory_to_camera.base_extrinsic, dtype=np.float64
-    ).reshape(4, 4)
-    if not np.isfinite(base_extrinsic).all():
-        raise ValueError("Configured base_extrinsic must be finite")
-
     scene_dir = config.scene_dir
     scene_parent = scene_dir.parent
     scene_parent.mkdir(parents=True, exist_ok=True)
@@ -370,9 +453,13 @@ def run_package_dataset(config: DatasetBuildConfig) -> Path:
             parquet_path = data_dir / f"{item.spec.episode_name}.parquet"
             _write_episode_parquet(
                 parquet_path,
-                item.camera.camera_to_world,
+                item.camera.t_world_ground,
+                item.camera.t_world_base_link,
+                item.camera.t_world_camera,
                 item.intrinsic,
-                base_extrinsic,
+                item.camera.t_base_from_camera,
+                item.camera.t_camera_from_base,
+                np.arange(start, end + 1, dtype=np.int64),
             )
             image_index = {"min": start, "max": end}
             stats_lines.append(json.dumps({"image_index": image_index}, separators=(",", ":")))

@@ -68,11 +68,18 @@ root_dirs/
 | 列名 | 类型 | 形状 | 说明 |
 |------|------|------|------|
 | `observation.camera_intrinsic` | `list[list[float]]` | `3×3`（展平存储） | 相机内参矩阵，取 `tolist()[0]` 后 reshape |
-| `observation.camera_extrinsic` | `list[list[float]]` | `4×4`（展平存储） | 相机外参矩阵（base extrinsic），取 `tolist()[0]` 后 reshape |
-| `action` | `list[ndarray]` | `(T, 4, 4)` | 每帧一个 4×4 世界坐标系下的相机位姿矩阵（`np.stack` 后 reshape） |
+| `observation.T_base_from_camera` | `list[list[float]]` | `4×4`（展平存储） | 静态 `T_base_from_camera` |
+| `observation.T_camera_from_base` | `list[list[float]]` | `4×4`（展平存储） | 静态 `inverse(T_base_from_camera)` |
+| `observation.robot_ground_pose` | `list[list[float]]` | 每帧 `4×4`（展平存储） | `T_world_ground`，base_link 的地面垂直投影 |
+| `observation.robot_base_pose` | `list[list[float]]` | 每帧 `4×4`（展平存储） | `T_world_base_link`，实际 Go2 base_link |
+| `observation.T_world_camera` | `list[list[float]]` | 每帧 `4×4`（展平存储） | `T_world_base_link @ T_base_from_camera` |
+| `timestamp_index` | `int64` | 每帧一个 | RGB、Depth、base pose 与 camera pose 共用的全局帧索引 |
+| `action` | `list[ndarray]` | `(T, 4, 4)` | 与 `observation.T_world_camera` 相同的每帧 `T_world_camera` |
 
 **约束**：
-- `observation.camera_intrinsic` 和 `observation.camera_extrinsic` 的 `tolist()[0]` 分别能 reshape 为 `(3, 3)` 和 `(4, 4)`
+- `observation.camera_intrinsic`、`observation.T_base_from_camera` 和 `observation.T_camera_from_base` 的 `tolist()[0]` 可分别 reshape 为 `(3, 3)`、`(4, 4)` 和 `(4, 4)`
+- 每帧必须满足 `observation.T_camera_from_base = inverse(observation.T_base_from_camera)`、`observation.T_world_camera = observation.robot_base_pose @ observation.T_base_from_camera`，且 `action = observation.T_world_camera`
+- `timestamp_index` 必须与 RGB/Depth 的全局文件序号一致
 - `action` 的帧数 = 轨迹长度，需 >= RGB/Depth 图像数
 - Parquet 文件名需与 `episodes_stats.jsonl` 行序一一对应
 

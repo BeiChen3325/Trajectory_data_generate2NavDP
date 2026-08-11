@@ -22,9 +22,10 @@ def _auto_in_component(
     *,
     min_distance_m: float,
     seed: int,
+    free: np.ndarray | None = None,
 ) -> np.ndarray:
     model = scene.model
-    labels = _component_labels(~model.planning_blocked)
+    labels = _component_labels(~model.planning_blocked if free is None else free)
     label = int(labels[fixed_cell[1], fixed_cell[0]])
     candidates = np.argwhere(labels == label)
     if candidates.shape[0] < 2:
@@ -48,9 +49,12 @@ def resolve_endpoints(
     *,
     min_distance_m: float,
     seed: int,
+    valid_sampling_cells: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     model = scene.model
-    free = ~model.planning_blocked
+    free = ~model.planning_blocked if valid_sampling_cells is None else valid_sampling_cells
+    if free.shape != model.planning_blocked.shape:
+        raise ValueError("valid sampling cells shape does not match the scene map")
     start = (
         nearest_free_cell(world_to_grid(request.start_xz, model.spec), free)
         if request.start_xz is not None
@@ -76,6 +80,7 @@ def resolve_endpoints(
             goal,
             min_distance_m=min_distance_m,
             seed=seed,
+            free=free,
         )
     if goal is None:
         goal = _auto_in_component(
@@ -83,5 +88,6 @@ def resolve_endpoints(
             start,
             min_distance_m=min_distance_m,
             seed=seed,
+            free=free,
         )
     return start, goal

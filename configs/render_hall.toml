@@ -1,0 +1,18 @@
+[paths]
+data_dir = "data/input"
+ply_filename = "hall3DGS_yup.ply"
+las_filename = "hall.las"
+output_dir = "outputs/hall/render"
+
+[camera]
+calibration_file = "src/camera_resource/realsense_d435i.json"
+stream = "color"
+up_axis = "-y"
+
+[runtime]
+background = "black"
+chunk_size = 1000000
+seed = 7
+
+[render]
+require_cuda = true

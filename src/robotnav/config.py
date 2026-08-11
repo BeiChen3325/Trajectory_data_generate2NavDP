@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
 from typing import Any
@@ -117,7 +118,14 @@ def load_path_config(filename: str) -> PathConfig:
 class CameraConfig:
     width: int
     height: int
-    fov: float
+    fx: float
+    fy: float
+    cx: float
+    cy: float
+    distortion_model: str
+    distortion_coeffs: tuple[float, ...]
+    calibration_path: Path
+    stream: str
     up_axis: str
 
 
@@ -129,25 +137,127 @@ class RenderRuntimeConfig:
 
 
 @dataclass(frozen=True)
+class RenderPolicyConfig:
+    require_cuda: bool = True
+
+
+@dataclass(frozen=True)
 class RenderConfig:
     paths: PathConfig
     camera: CameraConfig
     runtime: RenderRuntimeConfig
+    render: RenderPolicyConfig
 
 
 def load_render_config(filename: str = "render.toml") -> RenderConfig:
     """Load all render defaults from one validated TOML document."""
-    raw = load_command_toml(filename, sections={"paths", "camera", "runtime"})
+    raw = load_toml(CONFIG_DIR / filename)
+    allowed_sections = {"paths", "camera", "runtime", "render"}
+    missing_sections = {"paths", "camera", "runtime"} - raw.keys()
+    unknown_sections = raw.keys() - allowed_sections
+    if missing_sections or unknown_sections:
+        details = []
+        if missing_sections:
+            details.append("missing sections: " + ", ".join(sorted(missing_sections)))
+        if unknown_sections:
+            details.append("unknown sections: " + ", ".join(sorted(unknown_sections)))
+        raise ConfigurationError(f"Invalid {filename} ({'; '.join(details)})")
     paths = load_path_config(filename)
-    camera = CameraConfig(**load_dataclass_section(raw, "camera", CameraConfig))
+    camera_values = raw["camera"]
+    if not isinstance(camera_values, dict) or set(camera_values) != {
+        "calibration_file",
+        "stream",
+        "up_axis",
+    }:
+        raise ConfigurationError("[camera] must contain calibration_file, stream, and up_axis")
+    calibration_file = camera_values["calibration_file"]
+    stream_name = camera_values["stream"]
+    if not isinstance(calibration_file, str) or not calibration_file:
+        raise ConfigurationError("[camera].calibration_file must be a non-empty path")
+    if not isinstance(stream_name, str) or not stream_name:
+        raise ConfigurationError("[camera].stream must be a non-empty stream name")
+    calibration_path = _resolve_path(calibration_file)
+    try:
+        calibration = json.loads(calibration_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise
+    except (OSError, json.JSONDecodeError) as error:
+        raise ConfigurationError(
+            f"Cannot read camera calibration {calibration_path}: {error}"
+        ) from error
+    stream = calibration.get(stream_name)
+    intrinsics = stream.get("intrinsics") if isinstance(stream, dict) else None
+    if not isinstance(intrinsics, dict):
+        raise ConfigurationError(
+            f"Camera calibration {calibration_path} has no {stream_name}.intrinsics table"
+        )
+    required_intrinsics = {
+        "width",
+        "height",
+        "fx",
+        "fy",
+        "cx_ppx",
+        "cy_ppy",
+        "distortion_model",
+        "coeffs",
+    }
+    if set(intrinsics) != required_intrinsics:
+        raise ConfigurationError(
+            f"Camera calibration {calibration_path} has invalid {stream_name}.intrinsics keys"
+        )
+    width, height = intrinsics["width"], intrinsics["height"]
+    fx, fy, cx, cy = (
+        intrinsics["fx"],
+        intrinsics["fy"],
+        intrinsics["cx_ppx"],
+        intrinsics["cy_ppy"],
+    )
+    coefficients = intrinsics["coeffs"]
+    if (
+        not isinstance(width, int)
+        or not isinstance(height, int)
+        or any(not isinstance(value, (int, float)) for value in (fx, fy, cx, cy))
+        or not isinstance(intrinsics["distortion_model"], str)
+        or not isinstance(coefficients, list)
+        or not all(isinstance(value, (int, float)) for value in coefficients)
+    ):
+        raise ConfigurationError(
+            f"Camera calibration {calibration_path} has invalid intrinsic values"
+        )
+    camera = CameraConfig(
+        width=width,
+        height=height,
+        fx=float(fx),
+        fy=float(fy),
+        cx=float(cx),
+        cy=float(cy),
+        distortion_model=intrinsics["distortion_model"],
+        distortion_coeffs=tuple(float(value) for value in coefficients),
+        calibration_path=calibration_path,
+        stream=stream_name,
+        up_axis=camera_values["up_axis"],
+    )
     runtime = RenderRuntimeConfig(**load_dataclass_section(raw, "runtime", RenderRuntimeConfig))
-    if camera.width <= 0 or camera.height <= 0 or camera.fov <= 0:
-        raise ConfigurationError("[camera] width, height, and fov must be positive")
+    render = (
+        RenderPolicyConfig(**load_dataclass_section(raw, "render", RenderPolicyConfig))
+        if "render" in raw
+        else RenderPolicyConfig()
+    )
+    if camera.width <= 0 or camera.height <= 0 or camera.fx <= 0 or camera.fy <= 0:
+        raise ConfigurationError("[camera] width, height, fx, and fy must be positive")
+    if not (0 <= camera.cx <= camera.width and 0 <= camera.cy <= camera.height):
+        raise ConfigurationError("[camera] principal point must be inside the image")
+    if any(abs(value) > 1e-12 for value in camera.distortion_coeffs):
+        raise ConfigurationError(
+            "Renderer supports rectified pinhole intrinsics only; calibrate or rectify non-zero distortion"
+        )
     if camera.up_axis not in {"+x", "-x", "+y", "-y", "+z", "-z"}:
         raise ConfigurationError("[camera].up_axis must be a signed axis")
     if runtime.background not in {"black", "white"} or runtime.chunk_size <= 0:
         raise ConfigurationError("Invalid [runtime] background or chunk_size")
-    return RenderConfig(paths=paths, camera=camera, runtime=runtime)
+    if not isinstance(render.require_cuda, bool):
+        raise ConfigurationError("[render].require_cuda must be true or false")
+    return RenderConfig(paths=paths, camera=camera, runtime=runtime, render=render)
 
 
 def ensure_output_dirs() -> None:

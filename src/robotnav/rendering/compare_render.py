@@ -8,13 +8,17 @@ import cv2
 import numpy as np
 import torch
 
+from robotnav.coordinates import project_world_points
+
 try:
     from robotnav.rendering.render_one_view import (
         _rasterize_compat,
         axis_to_vector,
         build_single_view,
+        display_rgb_to_uint8,
         load_ply_to_torch,
         make_intrinsics,
+        report_rgb_range,
     )
 except ModuleNotFoundError as exc:
     missing = exc.name or str(exc)
@@ -93,10 +97,6 @@ def las_dtype_for_format(point_format, record_length):
     )
 
 
-def focal_from_matrix(K):
-    return float(K[0, 0]), float(K[1, 1]), float(K[0, 2]), float(K[1, 2])
-
-
 def normalize_las_rgb(red, green, blue, color_gain):
     rgb16 = np.stack([red, green, blue], axis=1).astype(np.float32)
     rgb = rgb16 / 65535.0
@@ -162,9 +162,6 @@ def render_las_points(las_path, viewmat_np, K_np, args):
     dtype = las_dtype_for_format(header["point_format"], header["point_record_length"])
     width = args.width
     height = args.height
-    fx, fy, cx, cy = focal_from_matrix(K_np)
-    world_to_cam = viewmat_np[:3, :].astype(np.float64)
-
     bg = 255 if args.background == "white" else 0
     image = np.full((height, width, 3), bg, dtype=np.uint8)
     zbuffer = np.full((height, width), np.inf, dtype=np.float32)
@@ -195,16 +192,15 @@ def render_las_points(las_path, viewmat_np, K_np, args):
             xyz[:, 2] = records["Z"] * header["scale"][2] + header["offset"][2]
             xyz = transform_las_points(xyz, args.las_axis_transform)
 
-            cam = xyz @ world_to_cam[:, :3].T + world_to_cam[:, 3]
+            cam, pixels, positive_depth = project_world_points(xyz, viewmat_np, K_np)
             depth = cam[:, 2]
-            in_front = (depth > args.near_plane) & (depth < args.far_plane)
+            in_front = positive_depth & (depth > args.near_plane) & (depth < args.far_plane)
             if np.any(in_front):
-                cam = cam[in_front]
                 depth = depth[in_front].astype(np.float32)
                 projected_total += int(depth.size)
 
-                u = np.rint(fx * cam[:, 0] / depth + cx).astype(np.int32)
-                v = np.rint(fy * cam[:, 1] / depth + cy).astype(np.int32)
+                u = np.rint(pixels[in_front, 0]).astype(np.int32)
+                v = np.rint(pixels[in_front, 1]).astype(np.int32)
                 in_image = (u >= 0) & (u < width) & (v >= 0) & (v < height)
                 if np.any(in_image):
                     source_indices = np.nonzero(in_front)[0][in_image]
@@ -274,7 +270,8 @@ def render_ply_gaussians(ply_path, viewmat, K, args, device):
         )
         torch.cuda.synchronize()
 
-    image = (renders[0].clamp(0.0, 1.0).detach().cpu().numpy() * 255.0).round().astype(np.uint8)
+    report_rgb_range("PLY comparison render", renders[0])
+    image = display_rgb_to_uint8(renders[0])
     alpha = alphas[0].detach().cpu().numpy()
     visible = 0
     gaussian_ids = meta.get("gaussian_ids")
@@ -310,11 +307,10 @@ def parse_args():
     parser.add_argument("--output-dir", default=str(config.paths.output_dir / "compare_las_ply"))
     parser.add_argument("--width", type=int, default=config.camera.width)
     parser.add_argument("--height", type=int, default=config.camera.height)
-    parser.add_argument("--fov", type=float, default=config.camera.fov)
-    parser.add_argument("--fx", type=float, default=None)
-    parser.add_argument("--fy", type=float, default=None)
-    parser.add_argument("--cx", type=float, default=None)
-    parser.add_argument("--cy", type=float, default=None)
+    parser.add_argument("--fx", type=float, default=config.camera.fx)
+    parser.add_argument("--fy", type=float, default=config.camera.fy)
+    parser.add_argument("--cx", type=float, default=config.camera.cx)
+    parser.add_argument("--cy", type=float, default=config.camera.cy)
     parser.add_argument("--eye", type=float, nargs=3, default=[0.0, 0.0, 0.0])
     parser.add_argument("--look-at", type=float, nargs=3, default=None)
     parser.add_argument("--look-dir", type=float, nargs=3, default=[-1.0, 0.0, 0.0])
@@ -344,7 +340,7 @@ def parse_args():
         "--las-axis-transform",
         choices=["zup-to-yup", "none"],
         default="zup-to-yup",
-        help="Transform LAS coordinates before projection. Default maps Z-up LAS to the Y-up PLY convention.",
+        help="Transform LAS [X,Y,Z] to project world [X,-Z,Y], whose +Y is physical down.",
     )
     return parser.parse_args()
 
@@ -363,7 +359,6 @@ def main():
     camera_args = SimpleNamespace(
         width=args.width,
         height=args.height,
-        fov=args.fov,
         fx=args.fx,
         fy=args.fy,
         cx=args.cx,

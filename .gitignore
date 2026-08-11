@@ -20,15 +20,42 @@ data/input/*
 data/target/*
 !data/input/.gitkeep
 outputs/
+traj_data/
 *.las
 *.laz
 *.ply
+*.parquet
+*.npz
 *.usd
 *.png
 *.jpg
+*.whl
 venv/
 env/
 ENV/
+
+# Local credentials and package / CUDA wheel caches
+.env
+.env.*
+!.env.example
+.uv-cache/
+wheels/
+pip-wheel-metadata/
+
+# Generated diagnostics retained locally, not source documentation
+/before_after_bounds.json
+/camera_forward_alignment_report*.json
+/gaussian_filter_report.json
+/gpu_environment_report.txt
+/scene_input_validation*_report.json
+/for_rapid_visual_check
+/*_report.md
+
+# Optional visual Go2 mesh assets.  The pipeline uses the tracked URDF/xacro,
+# calibration and controller source; these large duplicated DAE assets are not
+# required to reproduce dataset generation.
+/src/go2_resource/go2_description/dae/
+/src/go2_resource/go2_description/meshes/
 
 # Jupyter
 .ipynb_checkpoints/

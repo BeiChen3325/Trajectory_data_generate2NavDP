@@ -11,6 +11,7 @@ import shutil
 import sys
 
 from robotnav.config import ensure_output_dirs
+from robotnav.cuda_toolkit import configure_cuda_toolkit
 from robotnav.navigation.scene.config import load_scene_build_config
 
 PATHS = load_scene_build_config().paths
@@ -28,6 +29,7 @@ def check_base_dependencies() -> None:
 
 
 def check_cuda_backend() -> None:
+    toolkit_home = configure_cuda_toolkit()
     import gsplat
     import torch
 
@@ -42,6 +44,8 @@ def check_cuda_backend() -> None:
     nvcc = shutil.which("nvcc")
     if nvcc:
         print(f"[INFO] nvcc: {nvcc}")
+        if toolkit_home:
+            print(f"[INFO] CUDA toolkit: {toolkit_home}")
     else:
         print("[WARN] nvcc was not found; a cached gsplat extension is required")
 

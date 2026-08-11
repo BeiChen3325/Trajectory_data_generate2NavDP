@@ -52,7 +52,7 @@ def estimate_floor_y(
         if candidates.size == 0:
             floor_bin = int(np.argmax(coverage))
         else:
-            # In this Y-up scene convention, physical downward is +Y. The floor is
+            # In this scene convention, physical downward is +Y. The floor is
             # the high-Y broad horizontal plane; ceilings are lower Y planes.
             floor_bin = int(candidates[np.argmax(edges[candidates])])
 

@@ -46,10 +46,28 @@ class BatchConfig:
 
 
 @dataclass(frozen=True)
+class TrajectorySamplingConfig:
+    """Optional length acceptance policy for automatically sampled trajectories."""
+
+    trajectory_mode: str = "short"
+    min_length_m: float = 0.0
+    max_length_m: float = float("inf")
+
+
+@dataclass(frozen=True)
+class ValidRegionConfig:
+    yaml_path: Path | None
+    robot_radius_m: float
+    safety_margin_m: float
+
+
+@dataclass(frozen=True)
 class TrajectoryGenerationConfig:
     paths: TrajectoryPaths
     planner: PlannerConfig
     batch: BatchConfig
+    valid_region: ValidRegionConfig = ValidRegionConfig(None, 0.30, 0.10)
+    trajectory_sampling: TrajectorySamplingConfig = TrajectorySamplingConfig()
 
 
 def _path(value: Any, field: str) -> Path:
@@ -123,14 +141,58 @@ def load_trajectory_generation_config(
     if config_path.parent != CONFIG_DIR or config_path.suffix != ".toml":
         raise ConfigurationError(f"Expected a TOML file directly in {CONFIG_DIR}: {filename}")
     raw = load_toml(config_path)
-    expected_sections = {"paths", "planner", "trajectory_batch"}
-    if raw.keys() != expected_sections:
+    expected_sections = {
+        "paths",
+        "planner",
+        "trajectory_batch",
+        "trajectory_sampling",
+        "valid_region",
+    }
+    if raw.keys() - expected_sections:
         raise ConfigurationError(
-            f"Invalid {filename}; expected sections: {', '.join(sorted(expected_sections))}"
+            f"Invalid {filename}; expected only sections: {', '.join(sorted(expected_sections))}"
         )
     path_values = _table(raw, "paths", {"scene_dir", "output_dir"})
     planner_values = _table(raw, "planner", set(PlannerConfig.__dataclass_fields__))
     batch_values = _table(raw, "trajectory_batch", set(BatchConfig.__dataclass_fields__))
+    sampling_values = raw.get("trajectory_sampling", {})
+    if not isinstance(sampling_values, dict) or sampling_values.keys() - {
+        "trajectory_mode",
+        "min_length_m",
+        "max_length_m",
+    }:
+        raise ConfigurationError("Invalid [trajectory_sampling]")
+    trajectory_mode = sampling_values.get("trajectory_mode", "short")
+    min_length_m = sampling_values.get("min_length_m", 0.0)
+    max_length_m = sampling_values.get("max_length_m", float("inf"))
+    if trajectory_mode not in {"short", "long"}:
+        raise ConfigurationError("[trajectory_sampling].trajectory_mode must be short or long")
+    for key, value in (("min_length_m", min_length_m), ("max_length_m", max_length_m)):
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+            raise ConfigurationError(f"[trajectory_sampling].{key} must be non-negative")
+    if min_length_m > max_length_m:
+        raise ConfigurationError("[trajectory_sampling].min_length_m must not exceed max_length_m")
+    if trajectory_mode == "long" and min_length_m <= 0:
+        raise ConfigurationError("[trajectory_sampling].min_length_m must be positive in long mode")
+    region_values = raw.get("valid_region", {})
+    if not isinstance(region_values, dict) or region_values.keys() - {
+        "yaml_path",
+        "robot_radius_m",
+        "safety_margin_m",
+    }:
+        raise ConfigurationError("Invalid [valid_region]")
+    yaml_value = region_values.get("yaml_path", "")
+    if not isinstance(yaml_value, str):
+        raise ConfigurationError("[valid_region].yaml_path must be a string")
+    yaml_path = _path(yaml_value, "[valid_region].yaml_path") if yaml_value else None
+    robot_radius_m = region_values.get("robot_radius_m", 0.30)
+    safety_margin_m = region_values.get("safety_margin_m", 0.10)
+    for key, value in (
+        ("robot_radius_m", robot_radius_m),
+        ("safety_margin_m", safety_margin_m),
+    ):
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+            raise ConfigurationError(f"[valid_region].{key} must be non-negative")
     requests = _requests(batch_values["requests"])
     count = batch_values["count"]
     if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
@@ -172,5 +234,15 @@ def load_trajectory_generation_config(
                     "requests": requests,
                 },
             )
+        ),
+        valid_region=ValidRegionConfig(
+            yaml_path=yaml_path,
+            robot_radius_m=float(robot_radius_m),
+            safety_margin_m=float(safety_margin_m),
+        ),
+        trajectory_sampling=TrajectorySamplingConfig(
+            trajectory_mode=trajectory_mode,
+            min_length_m=float(min_length_m),
+            max_length_m=float(max_length_m),
         ),
     )

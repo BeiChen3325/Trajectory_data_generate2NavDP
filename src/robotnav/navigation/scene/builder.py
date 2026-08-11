@@ -45,6 +45,17 @@ class _OccupancyConfig:
     resolution_m: float
 
 
+def resolve_scene_bounds(header: dict[str, object], scene) -> tuple[np.ndarray, np.ndarray, str]:
+    """Choose global LAS bounds by default, with opt-in ROI cropping for diagnostics."""
+    if scene.enable_roi_crop:
+        if scene.roi_center_xz is None or scene.roi_size_xz is None:
+            raise ValueError("ROI crop requires roi_center_xz and roi_size_xz")
+        min_xz, max_xz = bounds_from_roi(scene.roi_center_xz, scene.roi_size_xz, padding=0.5)
+        return min_xz, max_xz, "roi_crop"
+    min_xz, max_xz = compute_bounds_from_header_yup(header, scene.axis_transform, padding=0.5)
+    return min_xz, max_xz, "las_header"
+
+
 def build_scene(config: SceneBuildConfig) -> SceneArtifact:
     """Build and persist a scene model without planning routes or exporting PLY."""
     scene = config.scene
@@ -56,10 +67,7 @@ def build_scene(config: SceneBuildConfig) -> SceneArtifact:
     debug_dir.mkdir(parents=True, exist_ok=True)
 
     header = parse_las_header(las_path)
-    if scene.roi_center_xz is not None and scene.roi_size_xz is not None:
-        min_xz, max_xz = bounds_from_roi(scene.roi_center_xz, scene.roi_size_xz, padding=0.5)
-    else:
-        min_xz, max_xz = compute_bounds_from_header_yup(header, scene.axis_transform, padding=0.5)
+    min_xz, max_xz, bounds_source = resolve_scene_bounds(header, scene)
 
     if scene.floor_y_override is None:
         sample = sample_las_xyz(
@@ -184,6 +192,13 @@ def build_scene(config: SceneBuildConfig) -> SceneArtifact:
         "floor_y": float(floor_y),
         "axis_transform": scene.axis_transform,
         "bounds_xz": {"min": min_xz.tolist(), "max": max_xz.tolist()},
+        "world_bounds": {
+            "x_min": float(min_xz[0]),
+            "x_max": float(max_xz[0]),
+            "z_min": float(min_xz[1]),
+            "z_max": float(max_xz[1]),
+            "source": bounds_source,
+        },
         "grid": {
             "resolution_m": scene.resolution_m,
             "width": spec["width"],

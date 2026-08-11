@@ -7,12 +7,58 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+from robotnav.cuda_toolkit import configure_cuda_toolkit
+
+configure_cuda_toolkit()
+
 from gsplat import rasterization
 from plyfile import PlyData
 
 from robotnav.config import load_render_config
 
 SH_C0 = 0.28209479177387814
+
+
+def decode_ply_sh_coefficients(f_dc: np.ndarray, f_rest: np.ndarray, sh_degree: int) -> np.ndarray:
+    """Decode Inria 3DGS PLY SH properties to gsplat's ``[N, K, RGB]`` layout.
+
+    The reference 3DGS exporter serializes ``f_rest_*`` by colour channel:
+    all R coefficients, then all G coefficients, then all B coefficients.  In
+    contrast, gsplat expects every SH basis to contain an RGB triplet.  Keeping
+    the PLY flat order and simply reshaping to ``[N, K, 3]`` mixes coefficients
+    across channels, which creates view-dependent magenta/green artifacts.
+    """
+    expected_rest_coeffs = (sh_degree + 1) ** 2 - 1
+    if f_rest.ndim != 2 or f_rest.shape[1] != expected_rest_coeffs * 3:
+        raise ValueError(
+            "PLY f_rest layout does not match the requested SH degree: "
+            f"degree={sh_degree}, f_rest shape={f_rest.shape}"
+        )
+    rest_by_channel = f_rest.reshape(f_rest.shape[0], 3, expected_rest_coeffs)
+    rest_by_basis = np.moveaxis(rest_by_channel, 1, 2)
+    return np.concatenate([f_dc[:, None, :], rest_by_basis], axis=1)
+
+
+def report_rgb_range(label: str, rgb: torch.Tensor) -> None:
+    """Print renderer RGB ranges before the PNG-specific [0, 1] clamp.
+
+    3DGS colors are display-referred values learned from the input images, not
+    scene-linear radiance.  The report makes the only PNG conversion explicit:
+    clamp to [0, 1], then quantize to uint8; no extra tone map or gamma curve is
+    applied.
+    """
+    below = int((rgb < 0.0).sum().item())
+    above = int((rgb > 1.0).sum().item())
+    print(
+        f"{label} RGB before PNG clamp: {rgb.min().item():.6g}..{rgb.max().item():.6g}; "
+        f"outside [0,1]: below={below}, above={above}"
+    )
+
+
+def display_rgb_to_uint8(rgb: torch.Tensor) -> np.ndarray:
+    """Quantize display-referred 3DGS RGB for PNG storage."""
+    return (rgb.clamp(0.0, 1.0).detach().cpu().numpy() * 255.0).round().astype(np.uint8)
 
 
 def _rasterize_compat(**kwargs):
@@ -126,9 +172,7 @@ def load_ply_to_torch(
         elif sh_degree == 0:
             colors = torch.from_numpy(f_dc[:, None, :]).to(device)
         else:
-            needed_rest_coeffs = (sh_degree + 1) ** 2 - 1
-            rest = f_rest.reshape(f_rest.shape[0], -1, 3)[:, :needed_rest_coeffs, :]
-            sh_coeffs = np.concatenate([f_dc[:, None, :], rest], axis=1)
+            sh_coeffs = decode_ply_sh_coefficients(f_dc, f_rest, sh_degree)
             colors = torch.from_numpy(sh_coeffs).to(device)
 
     bbox_min = means.min(dim=0).values
@@ -147,25 +191,12 @@ def load_ply_to_torch(
     return means, scales, quats, opacities, colors, center, radius, sh_degree
 
 
-def focal_from_fov(width, height, fov_degrees, device):
-    fov = math.radians(fov_degrees)
-    focal = 0.5 * max(width, height) / math.tan(0.5 * fov)
-    return torch.tensor(
-        [[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]],
-        dtype=torch.float32,
-        device=device,
-    )
-
-
 def make_intrinsics(args, device):
-    if args.fx is None and args.fy is None and args.cx is None and args.cy is None:
-        return focal_from_fov(args.width, args.height, args.fov, device)
-
-    fallback = focal_from_fov(args.width, args.height, args.fov, device)
-    fx = fallback[0, 0].item() if args.fx is None else args.fx
-    fy = fallback[1, 1].item() if args.fy is None else args.fy
-    cx = fallback[0, 2].item() if args.cx is None else args.cx
-    cy = fallback[1, 2].item() if args.cy is None else args.cy
+    """Build K from a complete calibrated pinhole intrinsic parameter set."""
+    values = (args.fx, args.fy, args.cx, args.cy)
+    if any(value is None for value in values):
+        raise ValueError("Calibrated camera intrinsics require fx, fy, cx, and cy")
+    fx, fy, cx, cy = values
     return torch.tensor(
         [[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]],
         dtype=torch.float32,
@@ -173,7 +204,7 @@ def make_intrinsics(args, device):
     )
 
 
-def look_at_world_to_camera(eye, target, up):
+def look_at_t_camera_from_world(eye, target, up):
     forward = F.normalize(target - eye, dim=0)
     right = torch.cross(forward, up, dim=0)
     if torch.linalg.norm(right) < 1e-6:
@@ -211,7 +242,7 @@ def build_single_view(args, device, up):
             raise ValueError("--look-dir must be non-zero.")
         target = eye + F.normalize(direction, dim=0) * args.look_distance
 
-    return "single", eye, target, look_at_world_to_camera(eye, target, up)
+    return "single", eye, target, look_at_t_camera_from_world(eye, target, up)
 
 
 def axis_to_vector(axis, device):
@@ -316,11 +347,10 @@ def parse_args():
     )
     parser.add_argument("--width", type=int, default=config.camera.width)
     parser.add_argument("--height", type=int, default=config.camera.height)
-    parser.add_argument("--fov", type=float, default=config.camera.fov, help="Horizontal-ish FOV.")
-    parser.add_argument("--fx", type=float, default=None, help="Camera focal length fx.")
-    parser.add_argument("--fy", type=float, default=None, help="Camera focal length fy.")
-    parser.add_argument("--cx", type=float, default=None, help="Camera principal point cx.")
-    parser.add_argument("--cy", type=float, default=None, help="Camera principal point cy.")
+    parser.add_argument("--fx", type=float, default=config.camera.fx, help="Calibrated camera fx.")
+    parser.add_argument("--fy", type=float, default=config.camera.fy, help="Calibrated camera fy.")
+    parser.add_argument("--cx", type=float, default=config.camera.cx, help="Calibrated camera cx.")
+    parser.add_argument("--cy", type=float, default=config.camera.cy, help="Calibrated camera cy.")
     parser.add_argument(
         "--unit-scale",
         type=float,
@@ -496,7 +526,7 @@ def render_batch():
             else:
                 eye = base_eye
                 target = eye + direction_tensor * args.look_distance
-            viewmats.append(look_at_world_to_camera(eye, target, up))
+            viewmats.append(look_at_t_camera_from_world(eye, target, up))
             backgrounds.append(background)
             names.append(
                 (
@@ -584,9 +614,10 @@ def render_batch():
     manifest_lines.append("")
 
     for vid, (name, eye_np, target_np) in enumerate(names):
-        render_img = renders[vid].clamp(0.0, 1.0).detach().cpu().numpy()
+        render_img = renders[vid]
         alpha = alphas[vid].detach().cpu()
-        image_u8 = (render_img * 255.0).round().astype(np.uint8)
+        report_rgb_range(f"[{vid:02d}] {name}", render_img)
+        image_u8 = display_rgb_to_uint8(render_img)
         image_bgr = cv2.cvtColor(image_u8, cv2.COLOR_RGB2BGR)
 
         if args.mode == "single" and args.out:

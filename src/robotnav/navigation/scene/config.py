@@ -24,6 +24,7 @@ class ScenePaths:
 class SceneConfig:
     axis_transform: str
     floor_y_override: float | None
+    enable_roi_crop: bool
     roi_center_xz: tuple[float, float] | None
     roi_size_xz: tuple[float, float] | None
     floor_search_y_min: float
@@ -118,6 +119,11 @@ def load_scene_build_config(filename: str = "navigation_scene.toml") -> SceneBui
     ):
         raise ConfigurationError("[paths].las_filename must be one filename")
     scene_fields = set(SceneConfig.__dataclass_fields__)
+    raw_scene_values = raw.get("scene")
+    if isinstance(raw_scene_values, dict) and "enable_roi_crop" not in raw_scene_values:
+        # Older scene TOML files predate the debug-only crop switch.  Their
+        # safe migration is a global map, never an implicit local crop.
+        raw["scene"] = {**raw_scene_values, "enable_roi_crop": False}
     scene_values = _table(raw, "scene", scene_fields)
     robot_values = _table(raw, "robot", set(RobotConfig.__dataclass_fields__))
     floor_override = scene_values["floor_y_override"]
@@ -127,6 +133,8 @@ def load_scene_build_config(filename: str = "navigation_scene.toml") -> SceneBui
         raise ConfigurationError("[scene].floor_y_override must be a number or auto")
     if scene_values["axis_transform"] not in {"none", "zup-to-yup"}:
         raise ConfigurationError("[scene].axis_transform must be none or zup-to-yup")
+    if not isinstance(scene_values["enable_roi_crop"], bool):
+        raise ConfigurationError("[scene].enable_roi_crop must be true or false")
     positive_scene = (
         "resolution_m",
         "ground_band_m",
@@ -143,6 +151,12 @@ def load_scene_build_config(filename: str = "navigation_scene.toml") -> SceneBui
         raise ConfigurationError("[robot] radius_m, height_m, and ground_margin_m must be positive")
     if robot_values["safety_margin_m"] < 0:
         raise ConfigurationError("[robot].safety_margin_m must be non-negative")
+    roi_center_xz = _optional_pair(scene_values["roi_center_xz"], "[scene].roi_center_xz")
+    roi_size_xz = _optional_pair(scene_values["roi_size_xz"], "[scene].roi_size_xz")
+    if scene_values["enable_roi_crop"] and (roi_center_xz is None or roi_size_xz is None):
+        raise ConfigurationError(
+            "[scene] roi_center_xz and roi_size_xz are required when enable_roi_crop=true"
+        )
     return SceneBuildConfig(
         paths=ScenePaths(
             data_dir=_path(path_values["data_dir"], "[paths].data_dir"),
@@ -155,12 +169,8 @@ def load_scene_build_config(filename: str = "navigation_scene.toml") -> SceneBui
                 {
                     **scene_values,
                     "floor_y_override": None if floor_override is None else float(floor_override),
-                    "roi_center_xz": _optional_pair(
-                        scene_values["roi_center_xz"], "[scene].roi_center_xz"
-                    ),
-                    "roi_size_xz": _optional_pair(
-                        scene_values["roi_size_xz"], "[scene].roi_size_xz"
-                    ),
+                    "roi_center_xz": roi_center_xz,
+                    "roi_size_xz": roi_size_xz,
                 },
             )
         ),

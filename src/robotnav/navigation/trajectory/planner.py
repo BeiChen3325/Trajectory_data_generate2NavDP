@@ -21,6 +21,7 @@ def plan_trajectory(
     scene: SceneArtifact,
     task: ResolvedTrajectoryTask,
     config: PlannerConfig,
+    valid_sampling_cells: np.ndarray | None = None,
 ) -> PlannedTrajectory:
     """Plan one route without reading LAS or writing any output."""
     model = scene.model
@@ -60,6 +61,24 @@ def plan_trajectory(
         )
     if collides:
         raise ValueError(f"Collision-free smoothing failed for trajectory {task.trajectory_id}")
+    if valid_sampling_cells is not None:
+        if valid_sampling_cells.shape != model.planning_blocked.shape:
+            raise ValueError("valid sampling cells shape does not match the scene map")
+        for name, cells in (("A*", path), ("shortcut", shortcut)):
+            if not np.all(valid_sampling_cells[cells[:, 1], cells[:, 0]]):
+                raise ValueError(f"{name} path leaves the valid sampling region")
+        smooth_cells = world_to_grid(smooth, model.spec)
+        height, width = valid_sampling_cells.shape
+        in_bounds = (
+            (smooth_cells[:, 0] >= 0)
+            & (smooth_cells[:, 0] < width)
+            & (smooth_cells[:, 1] >= 0)
+            & (smooth_cells[:, 1] < height)
+        )
+        if not np.all(in_bounds) or not np.all(
+            valid_sampling_cells[smooth_cells[in_bounds, 1], smooth_cells[in_bounds, 0]]
+        ):
+            raise ValueError("smoothed path leaves the valid sampling region")
     return PlannedTrajectory(
         task=task,
         astar_cells=path,

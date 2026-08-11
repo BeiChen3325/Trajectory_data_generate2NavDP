@@ -18,9 +18,13 @@ from robotnav.navigation.trajectory.config import (
 from robotnav.navigation.trajectory.contracts import PlannedTrajectory, ResolvedTrajectoryTask
 from robotnav.navigation.trajectory.endpoint_sampler import resolve_endpoints
 from robotnav.navigation.trajectory.planner import plan_trajectory
+from robotnav.navigation.trajectory.valid_region import (
+    build_valid_sampling_cells,
+    load_valid_region,
+)
 from robotnav.navigation.trajectory.visualization import draw_path_debug
 
-TRAJECTORY_MANIFEST_CONTRACT_VERSION = 1
+TRAJECTORY_MANIFEST_CONTRACT_VERSION = 2
 
 
 def _endpoint_separated(
@@ -64,11 +68,15 @@ def _trajectory_json(scene: SceneArtifact, planned: PlannedTrajectory) -> dict[s
         "trajectory_id": task.trajectory_id,
         "seed": task.seed,
         "coordinate_convention": (
-            "Y-up internal coordinates; ground plane is X-Z; "
-            "physical down is +Y and physical up is -Y."
+            "World coordinates: ground plane is X-Z; physical down is +Y and physical up is -Y."
         ),
         "floor_y": scene.model.floor_y,
-        "robot_base_y": scene.model.floor_y,
+        "robot_ground_pose": {
+            "frame": "ground",
+            "origin_y": scene.model.floor_y,
+            "path_xz": planned.smooth_xz.tolist(),
+            "orientation": "base_link yaw is derived from the path tangent downstream",
+        },
         "source_scene_model_sha256": scene.model_sha256,
         "start_xz": start_xz.tolist(),
         "goal_xz": goal_xz.tolist(),
@@ -118,11 +126,67 @@ def _write_route(
     }
 
 
+def _length_rejection_reason(
+    path_length_m: float,
+    config: TrajectoryGenerationConfig,
+) -> str | None:
+    sampling = config.trajectory_sampling
+    if sampling.trajectory_mode != "long":
+        return None
+    if path_length_m < sampling.min_length_m:
+        return (
+            f"path length {path_length_m:.3f} m is below "
+            f"long-mode minimum {sampling.min_length_m:.3f} m"
+        )
+    if path_length_m > sampling.max_length_m:
+        return (
+            f"path length {path_length_m:.3f} m exceeds "
+            f"long-mode maximum {sampling.max_length_m:.3f} m"
+        )
+    return None
+
+
+def _length_statistics(entries: list[dict[str, object]]) -> dict[str, float]:
+    lengths = np.asarray([float(entry["path_length_m"]) for entry in entries], dtype=np.float64)
+    return {
+        "min_m": float(lengths.min()),
+        "max_m": float(lengths.max()),
+        "mean_m": float(lengths.mean()),
+        "std_m": float(lengths.std()),
+    }
+
+
 def plan_trajectory_batch(config: TrajectoryGenerationConfig, scene: SceneArtifact) -> dict:
     """Generate exactly the configured number of routes or fail explicitly."""
     output_dir = config.paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     batch = config.batch
+    valid_sampling_cells = None
+    valid_region_metadata: dict[str, object] | None = None
+    if config.valid_region.yaml_path is not None:
+        region_path = config.valid_region.yaml_path
+        if not region_path.is_file():
+            raise FileNotFoundError(f"valid region YAML does not exist: {region_path}")
+        region = load_valid_region(region_path)
+        raw_mask, valid_sampling_cells, erosion_cells = build_valid_sampling_cells(
+            scene,
+            region,
+            robot_radius_m=config.valid_region.robot_radius_m,
+            safety_margin_m=config.valid_region.safety_margin_m,
+        )
+        np.save(output_dir / "valid_region_mask.npy", valid_sampling_cells)
+        valid_region_metadata = {
+            "yaml_path": os.path.relpath(region_path, output_dir),
+            "robot_radius_m": config.valid_region.robot_radius_m,
+            "safety_margin_m": config.valid_region.safety_margin_m,
+            "safety_distance_m": (
+                config.valid_region.robot_radius_m + config.valid_region.safety_margin_m
+            ),
+            "erosion_cells": erosion_cells,
+            "raw_region_cells": int(np.count_nonzero(raw_mask)),
+            "valid_sampling_cells": int(np.count_nonzero(valid_sampling_cells)),
+            "mask": "valid_region_mask.npy",
+        }
     requests = list(batch.requests)
     used_ids = {request.trajectory_id for request in requests}
     auto_index = 0
@@ -139,6 +203,7 @@ def plan_trajectory_batch(config: TrajectoryGenerationConfig, scene: SceneArtifa
     used_goals: list[np.ndarray] = []
     entries = []
     rejection_counts: dict[str, int] = {}
+    attempt_counts: list[int] = []
     for route_index, request in enumerate(requests):
         is_fully_explicit = request.start_xz is not None and request.goal_xz is not None
         attempt_limit = 1 if is_fully_explicit else batch.max_sampling_attempts
@@ -152,6 +217,7 @@ def plan_trajectory_batch(config: TrajectoryGenerationConfig, scene: SceneArtifa
                     request,
                     min_distance_m=batch.min_start_goal_distance_m,
                     seed=seed,
+                    valid_sampling_cells=valid_sampling_cells,
                 )
                 reason = _validate_candidate(
                     start,
@@ -166,7 +232,10 @@ def plan_trajectory_batch(config: TrajectoryGenerationConfig, scene: SceneArtifa
                 if reason is not None:
                     raise ValueError(reason)
                 task = ResolvedTrajectoryTask(request.trajectory_id, start, goal, seed)
-                planned = plan_trajectory(scene, task, config.planner)
+                planned = plan_trajectory(scene, task, config.planner, valid_sampling_cells)
+                reason = _length_rejection_reason(planned.path_length_m, config)
+                if reason is not None:
+                    raise ValueError(reason)
                 break
             except ValueError as error:
                 last_reason = str(error)
@@ -197,6 +266,7 @@ def plan_trajectory_batch(config: TrajectoryGenerationConfig, scene: SceneArtifa
         used_starts.append(planned.task.start_cell.copy())
         used_goals.append(planned.task.goal_cell.copy())
         entries.append(_write_route(output_dir, scene, planned))
+        attempt_counts.append(attempt + 1)
 
     manifest = {
         "contract_version": TRAJECTORY_MANIFEST_CONTRACT_VERSION,
@@ -206,8 +276,19 @@ def plan_trajectory_batch(config: TrajectoryGenerationConfig, scene: SceneArtifa
         "source_scene_model": os.path.relpath(scene.model_path, output_dir),
         "source_scene_model_sha256": scene.model_sha256,
         "planner_config": asdict(config.planner),
+        "trajectory_sampling": asdict(config.trajectory_sampling),
+        "sampling_statistics": {
+            "attempts_total": int(sum(attempt_counts)),
+            "attempts_mean": float(np.mean(attempt_counts)),
+            "episode_success_rate": float(len(entries) / batch.count),
+            "candidate_acceptance_rate": float(len(entries) / sum(attempt_counts)),
+            "rejections": rejection_counts,
+        },
+        "length_statistics": _length_statistics(entries),
         "trajectories": entries,
     }
+    if valid_region_metadata is not None:
+        manifest["valid_region"] = valid_region_metadata
     manifest_path = output_dir / batch.manifest_filename
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest

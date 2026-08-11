@@ -6,6 +6,9 @@ import argparse
 import subprocess
 import sys
 
+from robotnav.config import load_render_config
+from robotnav.gpu_environment import require_cuda_environment
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run all target dataset build stages in order.")
@@ -16,6 +19,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    render_config = load_render_config(args.render_config)
+    if not render_config.render.require_cuda:
+        raise ValueError("Formal dataset builds require [render].require_cuda=true")
+    require_cuda_environment()
     commands = [
         [
             sys.executable,

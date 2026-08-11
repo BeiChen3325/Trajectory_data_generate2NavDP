@@ -1,13 +1,14 @@
 [paths]
 data_dir = "data/input"
-ply_filename = "try1_yup.ply"
-las_filename = "try1-pointcloud-0706.las"
-output_dir = "outputs/render"
+# 与 navigation_scene.toml 使用同一 forth_local LAS；此 PLY 已是 navigation world 的 [X,-Z,Y] 轴序。
+ply_filename = "forth_local3DGS_yup_filtered.ply"
+las_filename = "forth_local.las"
+output_dir = "outputs/forth_local/render"
 
 [camera]
-width = 640
-height = 480
-fov = 50.0
+# Intel RealSense D435i color 标定；加载器从此 JSON 的 color.intrinsics 读取完整 K。
+calibration_file = "src/camera_resource/realsense_d435i.json"
+stream = "color"
 up_axis = "-y"
 
 [runtime]

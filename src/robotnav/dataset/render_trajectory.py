@@ -30,11 +30,14 @@ from robotnav.dataset.trajectory_manifest import (
     TrajectoryBatch,
     load_trajectory_batch,
 )
+from robotnav.gpu_environment import require_cuda_environment
 from robotnav.rendering.depth_render import make_uint16_depth
 from robotnav.rendering.render_one_view import (
     _rasterize_compat,
+    display_rgb_to_uint8,
     load_ply_to_torch,
     make_intrinsics,
+    report_rgb_range,
 )
 
 DEPTH_MODE = "ED"
@@ -66,11 +69,10 @@ def _camera_intrinsic(render_config: RenderConfig, device: torch.device) -> torc
     args = SimpleNamespace(
         width=render_config.camera.width,
         height=render_config.camera.height,
-        fov=render_config.camera.fov,
-        fx=None,
-        fy=None,
-        cx=None,
-        cy=None,
+        fx=render_config.camera.fx,
+        fy=render_config.camera.fy,
+        cx=render_config.camera.cx,
+        cy=render_config.camera.cy,
     )
     return make_intrinsics(args, device)
 
@@ -161,6 +163,11 @@ def render_episode(
     rgb_paths: list[str] = []
     depth_paths: list[str] = []
     valid_pixels: list[int] = []
+    depth_valid_pixel_count = 0
+    depth_total_pixel_count = 0
+    depth_saturated_pixel_count = 0
+    depth_min_u16: int | None = None
+    depth_max_u16: int | None = None
     batch_size = build_config.rendering.camera_batch_size
     width = render_config.camera.width
     height = render_config.camera.height
@@ -170,7 +177,7 @@ def render_episode(
         for start in range(0, camera_trajectory.frame_count, batch_size):
             stop = min(start + batch_size, camera_trajectory.frame_count)
             viewmats = torch.as_tensor(
-                camera_trajectory.world_to_camera[start:stop],
+                camera_trajectory.t_camera_world[start:stop],
                 dtype=torch.float32,
                 device=scene.device,
             )
@@ -212,7 +219,7 @@ def render_episode(
                 )
                 torch.cuda.synchronize()
 
-            rgb_batch = rgb_renders.clamp(0.0, 1.0).detach().cpu().numpy()
+            report_rgb_range(f"{episode.trajectory_id} frames {start}..{stop - 1}", rgb_renders)
             depth_batch = depth_renders[..., 0].detach().cpu().numpy().astype(np.float32)
             alpha_batch = depth_alphas[..., 0].detach().cpu().numpy().astype(np.float32)
 
@@ -220,27 +227,61 @@ def render_episode(
                 name = f"{int(camera_trajectory.frame_index[frame]):0{frame_digits}d}.png"
                 rgb_relative = Path("rgb") / name
                 depth_relative = Path("depth") / name
-                rgb_u8 = np.rint(rgb_batch[local_index] * 255.0).astype(np.uint8)
+                rgb_u8 = display_rgb_to_uint8(rgb_renders[local_index])
                 rgb_bgr = cv2.cvtColor(rgb_u8, cv2.COLOR_RGB2BGR)
                 valid = alpha_batch[local_index] > ALPHA_THRESHOLD
                 metric_depth = np.where(
                     valid, depth_batch[local_index], float(INVALID_DEPTH_VALUE)
                 ).astype(np.float32)
-                depth_u16, _ = make_uint16_depth(
+                depth_u16, depth_encoding_info = make_uint16_depth(
                     metric_depth,
                     valid,
                     mode="metric",
                     metric_scale=float(DEPTH_UNITS_PER_METER),
                 )
+                encoded_valid = depth_u16 > 0
+                valid_values = depth_u16[encoded_valid]
+                depth_valid_pixel_count += int(np.count_nonzero(encoded_valid))
+                depth_total_pixel_count += int(depth_u16.size)
+                depth_saturated_pixel_count += int(
+                    np.count_nonzero(depth_u16 == np.iinfo(np.uint16).max)
+                )
+                if valid_values.size:
+                    frame_min = int(valid_values.min())
+                    frame_max = int(valid_values.max())
+                    depth_min_u16 = (
+                        frame_min if depth_min_u16 is None else min(depth_min_u16, frame_min)
+                    )
+                    depth_max_u16 = (
+                        frame_max if depth_max_u16 is None else max(depth_max_u16, frame_max)
+                    )
                 _write_png(staging / rgb_relative, rgb_bgr)
                 _write_png(staging / depth_relative, depth_u16)
                 rgb_paths.append(rgb_relative.as_posix())
                 depth_paths.append(depth_relative.as_posix())
-                valid_pixels.append(int(np.count_nonzero(valid)))
+                valid_pixels.append(int(np.count_nonzero(encoded_valid)))
             print(
                 f"Rendered {episode.trajectory_id} frames {start}..{stop - 1}",
                 flush=True,
             )
+
+        depth_encoding = depth_encoding_info["depth_encoding"]
+        depth_quality = {
+            "frame_count": camera_trajectory.frame_count,
+            "total_pixels": depth_total_pixel_count,
+            "valid_pixels": depth_valid_pixel_count,
+            "invalid_ratio": 1.0 - depth_valid_pixel_count / depth_total_pixel_count,
+            "saturated_65535_pixels": depth_saturated_pixel_count,
+            "valid_depth_min_m": None
+            if depth_min_u16 is None
+            else depth_min_u16 / DEPTH_UNITS_PER_METER,
+            "valid_depth_max_m": None
+            if depth_max_u16 is None
+            else depth_max_u16 / DEPTH_UNITS_PER_METER,
+        }
+        (staging / "depth_quality_report.json").write_text(
+            json.dumps(depth_quality, indent=2), encoding="utf-8"
+        )
 
         manifest = {
             "contract_version": CONTRACT_VERSION,
@@ -251,10 +292,19 @@ def render_episode(
             "camera_intrinsic": scene.intrinsic.detach().cpu().numpy().reshape(-1).tolist(),
             "width": width,
             "height": height,
+            "rgb_depth_alignment": {
+                "pixel_coordinate_frame": "color",
+                "rgb_intrinsic": "K_color",
+                "depth_intrinsic": "K_color",
+                "view_transform": "T_camera_world",
+                "method": "same 3DGS projection",
+            },
             "rgb_paths": rgb_paths,
             "depth_paths": depth_paths,
             "depth_units_per_meter": DEPTH_UNITS_PER_METER,
             "invalid_depth_value": INVALID_DEPTH_VALUE,
+            "depth_encoding": depth_encoding,
+            "depth_quality_report": "depth_quality_report.json",
             "depth_mode": DEPTH_MODE,
             "alpha_threshold": ALPHA_THRESHOLD,
             "near_plane": NEAR_PLANE,
@@ -273,7 +323,14 @@ def render_episode(
             "render_config": {
                 "width": width,
                 "height": height,
-                "fov": render_config.camera.fov,
+                "fx": render_config.camera.fx,
+                "fy": render_config.camera.fy,
+                "cx": render_config.camera.cx,
+                "cy": render_config.camera.cy,
+                "distortion_model": render_config.camera.distortion_model,
+                "distortion_coeffs": list(render_config.camera.distortion_coeffs),
+                "calibration_path": str(render_config.camera.calibration_path),
+                "calibration_stream": render_config.camera.stream,
                 "up_axis": render_config.camera.up_axis,
                 "background": render_config.runtime.background,
                 "camera_batch_size": batch_size,
@@ -296,6 +353,8 @@ def run_render_trajectory(
     build_config: DatasetBuildConfig, render_config: RenderConfig
 ) -> tuple[Path, ...]:
     """Render every manifest episode while loading the shared scene only once."""
+    if render_config.render.require_cuda:
+        require_cuda_environment()
     batch = load_trajectory_batch(
         build_config.paths.trajectory_manifest,
         build_config.paths.episodes_dir,

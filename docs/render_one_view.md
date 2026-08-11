@@ -11,7 +11,6 @@ python .\camera_render\render_one_view.py `
   --ply ..\MindCloudXAI_output\test1_yup.ply `
   --eye 0 0 0 `
   --look-dir -1 0 0 `
-  --fov 70 `
   --near-plane 0.001 `
   --out .\render_output2D\single_origin_negx.png
 ```
@@ -23,7 +22,6 @@ python .\camera_render\render_one_view.py `
   --ply ..\MindCloudXAI_output\test1_yup.ply `
   --mode panorama `
   --eye 0 0 0 `
-  --fov 70 `
   --near-plane 0.001 `
   --output-dir .\render_output2D\origin_panorama
 ```
@@ -38,7 +36,7 @@ python .\camera_render\render_one_view.py `
 - 从 `(0, 0, 0)` 使用 `--mode panorama` 朝周围看，可以看到期望的教室室内场景。
 - 当前场景坐标中，`-Y` 方向对应现实世界的竖直向上方向。因此脚本默认使用 `--up-axis -y`。
 - `X` 和 `Z` 构成主要水平面。
-- 与现实现场和 SuperSplat 对照后，之前相机的水平轴曾经发生左右镜像；现在已经在 `look_at_world_to_camera()` 中修正叉乘顺序。
+- 与现实现场和 SuperSplat 对照后，之前相机的水平轴曾经发生左右镜像；现在已经在 `look_at_t_camera_from_world()` 中修正叉乘顺序。
 - 当前看起来 `Z` 轴方向相对于现实直觉可能是反的。后续如果用真实轨迹坐标生成图像，需要用现场/SuperSplat 对照确认“朝前”到底对应 `+X/-X/+Z/-Z` 中哪一个方向。
 
 一个已观察到的方向参考：
@@ -64,7 +62,6 @@ python .\camera_render\render_one_view.py `
   --mode single `
   --eye 0 0 0 `
   --look-dir -1 0 0 `
-  --fov 70 `
   --out .\render_output2D\single_origin_negx.png
 ```
 
@@ -81,7 +78,8 @@ python .\camera_render\render_one_view.py `
 
 如果已有完整外参矩阵，可以用 `--viewmat` 传入 row-major 的 world-to-camera 4x4 矩阵。此时 `--eye`、`--look-at`、`--look-dir` 会被忽略。
 
-内参默认由 `--fov`、`--width`、`--height` 推出；也可以显式传入 `--fx --fy --cx --cy`。
+内参默认从 `configs/render.toml` 引用的标定 JSON 读取；可用 `--fx --fy --cx --cy` 覆盖完整的
+标定参数，但不会再用 FOV 近似生成内参。
 
 ### panorama 模式，推荐用于调试，可观察场景全貌
 
@@ -92,7 +90,6 @@ python .\camera_render\render_one_view.py `
   --ply ..\MindCloudXAI_output\test1_yup.ply `
   --mode panorama `
   --eye 0 0 0 `
-  --fov 70 `
   --output-dir .\render_output2D\origin_panorama
 ```
 
@@ -121,8 +118,8 @@ distance = 0.1875
 - `--look-at X Y Z`：`single` 模式下的目标点，优先级高于 `--look-dir`。
 - `--viewmat M ...`：`single` 模式下的 world-to-camera 4x4 外参矩阵，row-major 16 个数。
 - `--views`：最多输出几个轴向视角，默认 6。
-- `--fov`：视场角，默认 50。室内机器人视角可以尝试 60-90。
-- `--fx --fy --cx --cy`：可选相机内参。如果不指定，则使用 `--fov` 自动计算。
+- `--fx --fy --cx --cy`：完整 pinhole 内参；默认值来自 `src/camera_resource/realsense_d435i.json`
+  的 color 流标定。
 - `--near-plane`：近裁剪面，默认 0.001。相机在场景内部时建议保持较小。
 - `--up-axis`：图像上方向对应的世界轴，当前默认 `-y`。
 - `--unit-scale`：PLY 坐标和高斯 scale 的缩放，默认 0.001。

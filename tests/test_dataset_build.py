@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pandas as pd
 import pytest
 from plyfile import PlyData, PlyElement
 
@@ -26,7 +27,10 @@ from robotnav.dataset.package_dataset import run_package_dataset, validate_targe
 from robotnav.dataset.trajectory_manifest import load_trajectory_batch
 from robotnav.dataset.trajectory_to_camera import (
     build_camera_trajectory,
+    go2_t_base_from_camera,
+    go2_t_world_from_base_link,
     path_tangents,
+    renderer_t_camera_from_world,
     run_trajectory_to_camera,
 )
 
@@ -44,8 +48,11 @@ def make_config(tmp_path: Path) -> DatasetBuildConfig:
             dataset_root=tmp_path / "target",
         ),
         trajectory_to_camera=TrajectoryToCameraConfig(
-            height_above_floor_m=0.5,
-            base_extrinsic=tuple(np.eye(4).reshape(-1).tolist()),
+            camera_pose_resource="test-camera-resource.yaml#presets.current_forward",
+            base_height_above_floor_m=0.5,
+            camera_frame="test_camera_optical",
+            base_from_camera_link_translation_m=(0.0, 0.0, 0.0),
+            base_from_camera_link_rpy_deg=(0.0, 0.0, 0.0),
         ),
         rendering=EpisodeRenderingConfig(camera_batch_size=2),
         dataset=DatasetOutputConfig(group_dir="group", scene_dir="scene", overwrite=False),
@@ -61,12 +68,18 @@ def write_trajectory_batch(config: DatasetBuildConfig, lengths: tuple[int, ...])
         trajectory_id = f"route_{index:03d}"
         route_path = routes_dir / f"{trajectory_id}.json"
         route = {
-            "contract_version": 1,
+            "contract_version": 2,
             "trajectory_id": trajectory_id,
             "source_scene_model_sha256": SCENE_SHA256,
             "floor_y": 1.0,
             "coordinate_convention": "Y-up test",
             "smooth_path_xz": [[float(frame), float(index)] for frame in range(length)],
+            "robot_ground_pose": {
+                "frame": "ground",
+                "origin_y": 1.0,
+                "path_xz": [[float(frame), float(index)] for frame in range(length)],
+                "orientation": "test",
+            },
         }
         route_path.write_text(json.dumps(route), encoding="utf-8")
         entries.append(
@@ -77,7 +90,7 @@ def write_trajectory_batch(config: DatasetBuildConfig, lengths: tuple[int, ...])
             }
         )
     manifest = {
-        "contract_version": 1,
+        "contract_version": 2,
         "requested_count": len(entries),
         "trajectory_count": len(entries),
         "source_scene_model_sha256": SCENE_SHA256,
@@ -139,6 +152,13 @@ def write_rendered_episodes(config: DatasetBuildConfig) -> None:
             "camera_intrinsic": [2.0, 0.0, 2.0, 0.0, 2.0, 1.5, 0.0, 0.0, 1.0],
             "width": 4,
             "height": 3,
+            "rgb_depth_alignment": {
+                "pixel_coordinate_frame": "color",
+                "rgb_intrinsic": "K_color",
+                "depth_intrinsic": "K_color",
+                "view_transform": "T_camera_world",
+                "method": "same 3DGS projection",
+            },
             "rgb_paths": rgb_paths,
             "depth_paths": depth_paths,
             "depth_units_per_meter": DEPTH_UNITS_PER_METER,
@@ -157,6 +177,14 @@ def test_default_dataset_build_config_loads() -> None:
     assert config.paths.trajectory_manifest.name == "trajectory_manifest.json"
     assert config.paths.semantic_pointcloud_filename == "pointcloud.ply"
     assert config.paths.semantic_pointcloud_report_filename == "pointcloud_report.json"
+    assert (
+        config.trajectory_to_camera.camera_pose_resource
+        == "src/camera_resource/camera_pose_presets.yaml#presets.current_forward"
+    )
+    assert config.trajectory_to_camera.camera_frame == "front_camera_optical"
+    assert config.trajectory_to_camera.base_height_above_floor_m == pytest.approx(0.53)
+    assert config.trajectory_to_camera.base_from_camera_link_translation_m == (0.30, 0.0, 0.12)
+    assert config.trajectory_to_camera.base_from_camera_link_rpy_deg == (0.0, 0.0, 0.0)
     assert config.rendering.camera_batch_size > 0
 
 
@@ -170,16 +198,55 @@ def test_camera_trajectory_preserves_path_and_inverse(tmp_path: Path) -> None:
     trajectory = build_camera_trajectory(
         points,
         floor_y=2.0,
-        height_above_floor_m=0.5,
+        base_height_above_floor_m=0.5,
+        t_base_from_camera=np.eye(4),
         source_trajectory=tmp_path / "trajectory.json",
         source_sha256="test",
         coordinate_convention="Y-up",
     )
-    np.testing.assert_allclose(trajectory.camera_to_world[:, 0, 3], points[:, 0])
-    np.testing.assert_allclose(trajectory.camera_to_world[:, 1, 3], 1.5)
-    np.testing.assert_allclose(trajectory.camera_to_world[:, 2, 3], points[:, 1])
-    products = trajectory.camera_to_world @ trajectory.world_to_camera
+    np.testing.assert_allclose(trajectory.t_world_ground[:, 0, 3], points[:, 0])
+    np.testing.assert_allclose(trajectory.t_world_ground[:, 1, 3], 2.0)
+    np.testing.assert_allclose(trajectory.t_world_ground[:, 2, 3], points[:, 1])
+    np.testing.assert_allclose(trajectory.t_world_base_link[:, 0, 3], points[:, 0])
+    np.testing.assert_allclose(trajectory.t_world_base_link[:, 1, 3], 1.5)
+    np.testing.assert_allclose(trajectory.t_world_base_link[:, 2, 3], points[:, 1])
+    np.testing.assert_allclose(trajectory.t_world_camera, trajectory.t_world_base_link)
+    np.testing.assert_allclose(
+        trajectory.t_world_camera,
+        trajectory.t_world_base_link @ trajectory.t_base_from_camera,
+    )
+    np.testing.assert_allclose(
+        trajectory.t_camera_from_base,
+        np.linalg.inv(trajectory.t_base_from_camera),
+    )
+    products = trajectory.t_world_camera @ trajectory.t_camera_world
     np.testing.assert_allclose(products, np.repeat(np.eye(4)[None, :, :], 3, axis=0), atol=1e-6)
+
+
+def test_forward_go2_obstacle_projects_to_principal_point() -> None:
+    """A point on the Go2 forward axis must project to the calibrated image center."""
+    t_world_base_link = go2_t_world_from_base_link(
+        np.array([0.0, 0.0]),
+        np.array([1.0, 0.0]),
+        floor_y=0.0,
+        base_height_above_floor_m=0.53,
+    )
+    t_base_from_camera = go2_t_base_from_camera((0.30, 0.0, 0.12), (0.0, 0.0, 0.0))
+    t_world_camera = t_world_base_link @ t_base_from_camera
+    t_camera_world = renderer_t_camera_from_world(t_world_camera)
+
+    # Camera center is (0.30, -0.65, 0); this obstacle is 2 m along Go2 +X.
+    obstacle_world = np.array([2.30, -0.65, 0.0, 1.0])
+    obstacle_camera = t_camera_world @ obstacle_world
+    assert obstacle_camera[2] == pytest.approx(2.0)
+    assert obstacle_camera[0] == pytest.approx(0.0)
+    assert obstacle_camera[1] == pytest.approx(0.0)
+
+    fx, fy, cx, cy = 602.6174926757812, 601.5787353515625, 430.550048828125, 246.98899841308594
+    u = fx * obstacle_camera[0] / obstacle_camera[2] + cx
+    v = fy * obstacle_camera[1] / obstacle_camera[2] + cy
+    assert u == pytest.approx(cx)
+    assert v == pytest.approx(cy)
 
 
 def test_manifest_hash_mismatch_fails_before_conversion(tmp_path: Path) -> None:
@@ -221,6 +288,13 @@ def test_package_multiple_episodes_from_fixed_files(tmp_path: Path) -> None:
     assert (scene_dir / "data/chunk-000/001.parquet").is_file()
     assert len(list((scene_dir / "videos/chunk-000/observation.images.rgb").glob("*.png"))) == 5
     assert (scene_dir / "meta/pointcloud.ply").is_file()
+    frame = pd.read_parquet(scene_dir / "data/chunk-000/000.parquet")
+    assert "observation.robot_ground_pose" in frame
+    assert "observation.robot_base_pose" in frame
+    ground_pose = np.asarray(frame["observation.robot_ground_pose"].tolist()[0]).reshape(4, 4)
+    base_pose = np.asarray(frame["observation.robot_base_pose"].tolist()[0]).reshape(4, 4)
+    assert ground_pose[1, 3] == pytest.approx(1.0)
+    assert base_pose[1, 3] == pytest.approx(0.5)
 
 
 def test_pointcloud_scene_mismatch_prevents_publish(tmp_path: Path) -> None:

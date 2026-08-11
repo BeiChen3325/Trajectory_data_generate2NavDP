@@ -1,0 +1,17 @@
+presets:
+  current_forward:
+    # Single source for the Go2 camera pose used by the dataset pipeline.
+    camera_frame: front_camera_optical
+    # Nominal standing base height used to lift the X-Z base route into world 3D.
+    base_height_above_floor_m: 0.53
+    position_m: [0.30, 0.0, 0.12]
+    rpy_deg: [0.0, 0.0, 0.0]
+  pitch_down_10:
+    position_m: [0.30, 0.0, 0.12]
+    rpy_deg: [0.0, -10.0, 0.0]
+  pitch_down_20:
+    position_m: [0.30, 0.0, 0.12]
+    rpy_deg: [0.0, -20.0, 0.0]
+  pitch_down_30:
+    position_m: [0.30, 0.0, 0.12]
+    rpy_deg: [0.0, -30.0, 0.0]

@@ -22,6 +22,9 @@ from robotnav.rendering.render_one_view import (
     make_intrinsics,
 )
 
+NAVDP_DEPTH_MIN_M = 0.1
+NAVDP_DEPTH_MAX_M = 5.0
+
 
 def parse_args() -> argparse.Namespace:
     config = load_render_config()
@@ -44,11 +47,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", default="depth", help="Output filename stem.")
     parser.add_argument("--width", type=int, default=config.camera.width)
     parser.add_argument("--height", type=int, default=config.camera.height)
-    parser.add_argument("--fov", type=float, default=config.camera.fov)
-    parser.add_argument("--fx", type=float, default=None)
-    parser.add_argument("--fy", type=float, default=None)
-    parser.add_argument("--cx", type=float, default=None)
-    parser.add_argument("--cy", type=float, default=None)
+    parser.add_argument("--fx", type=float, default=config.camera.fx)
+    parser.add_argument("--fy", type=float, default=config.camera.fy)
+    parser.add_argument("--cx", type=float, default=config.camera.cx)
+    parser.add_argument("--cy", type=float, default=config.camera.cy)
     parser.add_argument("--eye", type=float, nargs=3, default=[0.0, 0.0, 0.0])
     parser.add_argument("--look-at", type=float, nargs=3, default=None)
     parser.add_argument("--look-dir", type=float, nargs=3, default=[-1.0, 0.0, 0.0])
@@ -104,7 +106,6 @@ def camera_from_args(
     camera_args = SimpleNamespace(
         width=args.width,
         height=args.height,
-        fov=args.fov,
         fx=args.fx,
         fy=args.fy,
         cx=args.cx,
@@ -235,9 +236,22 @@ def make_uint16_depth(
         return encoded, info
     if mode == "metric":
         if metric_scale > 0:
-            values = np.clip(depth[valid] * metric_scale, 0, np.iinfo(np.uint16).max)
-            encoded[valid] = values.astype(np.uint16)
+            valid_metric = (
+                valid
+                & np.isfinite(depth)
+                & (depth >= NAVDP_DEPTH_MIN_M)
+                & (depth <= NAVDP_DEPTH_MAX_M)
+            )
+            encoded[valid_metric] = np.rint(depth[valid_metric] * metric_scale).astype(
+                np.uint16
+            )
         info["depth_png_scale"] = float(metric_scale)
+        info["depth_encoding"] = {
+            "type": "uint16",
+            "scale": float(metric_scale),
+            "valid_range": [NAVDP_DEPTH_MIN_M, NAVDP_DEPTH_MAX_M],
+            "invalid_value": 0,
+        }
         return encoded, info
 
     lo, hi = depth_display_range(depth, valid)

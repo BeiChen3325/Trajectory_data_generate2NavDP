@@ -16,7 +16,15 @@ from robotnav.navigation.trajectory.config import (
     TrajectoryGenerationConfig,
     TrajectoryPaths,
     TrajectoryRequest,
+    TrajectorySamplingConfig,
+    ValidRegionConfig,
     load_trajectory_generation_config,
+)
+from robotnav.navigation.trajectory.valid_region import (
+    ValidRegion,
+    build_valid_sampling_cells,
+    load_valid_region,
+    save_valid_region,
 )
 
 
@@ -113,6 +121,26 @@ def test_explicit_duplicate_endpoint_pair_fails(tmp_path: Path) -> None:
         plan_trajectory_batch(config, artifact)
 
 
+def test_long_mode_rejects_paths_outside_final_length_bounds(tmp_path: Path) -> None:
+    artifact = make_artifact(tmp_path)
+    base = make_config(tmp_path, count=2)
+    config = TrajectoryGenerationConfig(
+        base.paths,
+        base.planner,
+        base.batch,
+        base.valid_region,
+        TrajectorySamplingConfig("long", 5.0, 50.0),
+    )
+    manifest = plan_trajectory_batch(config, artifact)
+
+    assert manifest["trajectory_sampling"]["trajectory_mode"] == "long"
+    assert manifest["sampling_statistics"]["episode_success_rate"] == 1.0
+    assert manifest["sampling_statistics"]["candidate_acceptance_rate"] <= 1.0
+    lengths = [entry["path_length_m"] for entry in manifest["trajectories"]]
+    assert all(5.0 <= length <= 50.0 for length in lengths)
+    assert manifest["length_statistics"]["min_m"] == min(lengths)
+
+
 def test_requests_cannot_exceed_count(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "too_many.toml"
     config_path.write_text(
@@ -146,3 +174,40 @@ requests = [
     )
     with pytest.raises(ConfigurationError, match="cannot exceed"):
         load_trajectory_generation_config("too_many.toml")
+
+
+def test_valid_region_yaml_mask_erosion_and_sampling(tmp_path: Path) -> None:
+    artifact = make_artifact(tmp_path)
+    region_path = tmp_path / "valid_region.yaml"
+    region = ValidRegion(
+        resolution_m=1.0,
+        origin_xz=np.array([0.0, 0.0]),
+        polygon_xz=np.array([[5.0, 5.0], [45.0, 5.0], [45.0, 45.0], [5.0, 45.0]]),
+    )
+    save_valid_region(region_path, region)
+    raw_mask, valid_cells, erosion_cells = build_valid_sampling_cells(
+        artifact,
+        load_valid_region(region_path),
+        robot_radius_m=1.0,
+        safety_margin_m=1.0,
+    )
+    assert erosion_cells == 2
+    assert raw_mask[5, 5]
+    assert not valid_cells[5, 5]
+    assert valid_cells[10, 10]
+
+    config = make_config(tmp_path, count=2)
+    config = TrajectoryGenerationConfig(
+        config.paths,
+        config.planner,
+        config.batch,
+        ValidRegionConfig(region_path, 1.0, 1.0),
+    )
+    manifest = plan_trajectory_batch(config, artifact)
+    mask = np.load(tmp_path / "trajectories" / "valid_region_mask.npy")
+    assert manifest["valid_region"]["safety_distance_m"] == 2.0
+    for entry in manifest["trajectories"]:
+        route = json.loads((tmp_path / "trajectories" / entry["path"]).read_text())
+        cells = np.asarray(route["astar_path_xz"])
+        grid = np.floor(cells).astype(int)
+        assert np.all(mask[grid[:, 1], grid[:, 0]])

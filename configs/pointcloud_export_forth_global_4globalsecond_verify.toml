@@ -1,0 +1,18 @@
+[paths]
+data_dir = "data/input"
+las_filename = "4globalsecond.las"
+scene_dir = "outputs/forth_global_4globalsecond_verify/navigation_scene"
+output_dir = "outputs/forth_global_4globalsecond_verify/semantic_pointcloud"
+
+[pointcloud]
+filename = "pointcloud.ply"
+report_filename = "pointcloud_report.json"
+obstacle_color_rgb = [0, 0, 128]
+context_color_rgb = [192, 192, 192]
+obstacle_voxel_size_m = 0.02
+context_voxel_size_m = 0.05
+include_context = true
+
+[runtime]
+chunk_size = 1000000
+max_stream_points = 0

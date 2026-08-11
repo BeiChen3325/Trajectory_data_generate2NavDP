@@ -1,0 +1,15 @@
+[paths]
+data_dir = "data/input"
+ply_filename = "forth_global3DGS_yup.ply"
+las_filename = "forth_global.las"
+output_dir = "outputs/forth_global_legacy/render"
+
+[camera]
+calibration_file = "src/camera_resource/realsense_d435i.json"
+stream = "color"
+up_axis = "-y"
+
+[runtime]
+background = "black"
+chunk_size = 1000000
+seed = 7

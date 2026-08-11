@@ -1,105 +1,109 @@
-# ZJUgive DataEngine for RobotNav
+# RobotNav trajectory data generation → NavDP
 
-实验性点云、3D Gaussian 渲染和机器人导航轨迹工具集。
+This repository contains a reproducible GPU data-generation pipeline for
+Unitree Go2 navigation training data:
 
-## 环境
+```text
+LAS + 3DGS PLY → global navigation scene → long trajectories
+→ camera trajectories → 3DGS RGB-D → RobotNav → NavDP
+```
 
-项目使用 Python 3.10+，GPU 功能需要与本机 CUDA 匹配的 PyTorch 和 gsplat。
+Generated scenes, images, depth, parquet files, point clouds and model inputs
+are intentionally not versioned.  The repository contains code, configuration,
+validation tools and small-batch smoke configurations only.
+
+## Inputs
+
+Place the current production inputs locally; do not commit them:
+
+```text
+data/input/4globalsecond.las
+data/input/4globalsecond3DGS_yup.ply
+```
+
+The global-scene configuration reads LAS header bounds with ROI cropping
+disabled.  The production architecture is a single global navigation scene and
+long trajectories, rather than per-trajectory local scenes.
+
+## GPU prerequisites
+
+Use a CUDA-capable PyTorch installation and `gsplat`.  The renderer deliberately
+requires CUDA; it does not fall back to a CPU rasterizer.
 
 ```bash
-uv sync
 uv sync --extra gpu
-uv run env-check
+uv run check-gpu-environment
+
+# Optional: write a local, ignored preflight snapshot.
+./scripts/export_gpu_environment.sh
 ```
 
-环境检查是运行渲染和轨迹生成前的第一步，会检查 Python 依赖、CUDA、gsplat 后端和项目模块。
+`check-gpu-environment` verifies the NVIDIA runtime, PyTorch CUDA availability,
+CUDA toolkit discovery and gsplat readiness.  `export_gpu_environment.sh` writes
+`gpu_environment_report.txt`, which is intentionally ignored by Git.
 
-## 数据和输出
+## Reproducible 4globalsecond smoke run
 
-输入文件默认设置放在`data/input/`目录，例如：
+The following uses two long trajectories (`5–10 m`) and isolated output paths.
+It is the recommended preflight before launching a larger production batch.
+
+```bash
+uv run build-scene --config navigation_scene_forth_global_4globalsecond_camera_extrinsic_smoke.toml
+uv run export-pointcloud --config pointcloud_export_forth_global_4globalsecond_camera_extrinsic_smoke.toml
+uv run generate-trajectories --config trajectories_forth_global_4globalsecond_camera_extrinsic_smoke.toml
+uv run build-dataset \
+  --config dataset_build_forth_global_4globalsecond_camera_extrinsic_smoke.toml \
+  --render-config render_forth_global_4globalsecond_camera_extrinsic_smoke.toml
+uv run convert-navdp-dataset \
+  --input data/target/robotnav/forth_global_4globalsecond_camera_extrinsic_smoke \
+  --output traj_data/robotnav/forth_global_4globalsecond_camera_extrinsic_smoke
+uv run navdp-loader-test \
+  --dataset-root traj_data \
+  --scene robotnav/forth_global_4globalsecond_camera_extrinsic_smoke \
+  --loader-path "${INTERNNAV_ROOT}/internnav/dataset/navdp_lerobot_dataset.py"
+```
+
+Alternatively, export `INTERNNAV_LOADER_PATH` to the same file before invoking
+`navdp-loader-test`.  InternNav is intentionally not bundled in this repository.
+
+Outputs are ignored by design:
 
 ```text
-data/input/
-├── try1-pointcloud-0706.las
-└── try1_yup.ply
+outputs/forth_global_4globalsecond_camera_extrinsic_smoke/
+data/target/robotnav/forth_global_4globalsecond_camera_extrinsic_smoke/
+traj_data/robotnav/forth_global_4globalsecond_camera_extrinsic_smoke/
 ```
 
-运行中间结果默认写入 `outputs/`下子目录中。
+The loader test selects a single scene and filters RGB/Depth by that episode's
+image-index range before invoking InternNav's `__getitem__`; it does not compare
+the full scene image count with one episode parquet.
 
-最终生成的数据集默认生成在`data/target/robotnav/`中。
+## NavDP camera-extrinsic contract
 
-大体积点云和生成结果不提交到 Git。
-
-## 常用命令
-
-### 准备工作：
-
-准备导航需要的数据与轨迹：
-
-```bash
-uv run prepare-navigation-data
-```
-
-也可以分为三个阶段运行：
-
-```bash
-uv run build-scene            # 场景构建
-uv run generate-trajectories  # 轨迹生成
-uv run export-pointcloud      # 语义点云导出
-```
-
-场景构建、轨迹生成和 PLY 导出拥有各自的配置与输出目录。修改 A* 或批量参数只需重跑轨迹；
-修改颜色或体素参数只需重跑 PLY。轨迹批次由
-`outputs/trajectories/trajectory_manifest.json` 索引。
-
-### 目标数据集构建
-
-数据集构建分为将轨迹转化成相机位姿、用相机位姿渲染rgb图和深度图、打包数据三个阶段。三个阶段通过版本化文件交付，可以独立执行：
-
-```bash
-uv run trajectory-to-camera
-uv run render-trajectory
-uv run package-dataset
-```
-
-中间产物按轨迹 ID 隔离：
+`observation.camera_extrinsic` is fixed camera calibration, not a trajectory
+pose:
 
 ```text
-outputs/dataset_build/episodes/<trajectory_id>/
-├── camera_trajectory.npz
-├── camera_trajectory.json
-└── rendered_episode/
-    ├── rgb/
-    ├── depth/
-    └── render_manifest.json
+observation.camera_extrinsic = T_base_from_camera
+p_base = T_base_from_camera @ p_camera
 ```
 
-也可以顺序执行全部阶段：
+It is stored as a row-major nested `float32[4][4]`.  The converter retains the
+source fields `observation.T_base_from_camera`,
+`observation.T_camera_from_base`, and `observation.T_world_camera`, and validates
+that the first two are inverses.  It does not compose the camera extrinsic with
+the NavDP world transform.
 
-```bash
-uv run build-dataset --config dataset_build.toml --render-config render.toml
-```
+See [training compatibility](docs/training_compatibility.md) for the distinct
+pixel-goal/action coordinate-chain requirement.
 
-最终 scene 包含多个按顺序命名的 parquet，RGB/Depth 使用跨 episode 的连续全局编号，
-`episodes_stats.jsonl` 记录每个 episode 的图片闭区间。语义点云默认位于
-`outputs/semantic_pointcloud/pointcloud.ply`。
+## Repository layout
 
-以下命令可独立验证最终 scene：
-
-```bash
-uv run validate-dataset data/target/robotnav/scene-000
-```
-
-### 静态检查
-
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check
-```
-
-源码位于 `src/robotnav/`。导航职责进一步分为 `navigation/scene/`、
-`navigation/trajectory/` 和 `navigation/semantic_pointcloud/`，CLI 位于 `commands/`。
-目标数据集契约与多 episode 映射详见
-[`docs/target_data.md`](docs/target_data.md) 和
-[`docs/dataset_pipeline.md`](docs/dataset_pipeline.md)。
+- `src/robotnav/` — navigation scene, Go2 camera trajectory, 3DGS rendering,
+  RobotNav packaging and NavDP conversion.
+- `src/camera_resource/` — RealSense D435i intrinsics and camera pose preset.
+- `src/go2_resource/` — Go2 URDF/xacro and controller source used by the
+  project (large optional visual meshes are excluded).
+- `configs/` — production, global-scene, long-trajectory and smoke TOML files.
+- `scripts/` — GPU preflight and environment export helpers.
+- `tests/` — pipeline, coordinate, depth and scene-bound validation.

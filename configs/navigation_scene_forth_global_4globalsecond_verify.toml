@@ -1,0 +1,32 @@
+[paths]
+data_dir = "data/input"
+las_filename = "4globalsecond.las"
+output_dir = "outputs/forth_global_4globalsecond_verify/navigation_scene"
+
+[scene]
+axis_transform = "zup-to-yup"
+floor_y_override = "auto"
+enable_roi_crop = false
+roi_center_xz = []
+roi_size_xz = []
+floor_search_y_min = 0.0
+floor_search_y_max = 3.0
+resolution_m = 0.08
+ground_band_m = 0.08
+min_points_per_cell = 2
+min_ground_points_per_cell = 2
+open_kernel_cells = 1
+close_kernel_cells = 2
+min_obstacle_component_cells = 8
+ground_close_kernel_cells = 2
+chunk_size = 1000000
+max_stream_points = 0
+floor_sample_limit = 1200000
+floor_hist_bins = 180
+floor_xy_resolution_m = 0.25
+
+[robot]
+radius_m = 0.30
+height_m = 0.65
+ground_margin_m = 0.06
+safety_margin_m = 0.10
