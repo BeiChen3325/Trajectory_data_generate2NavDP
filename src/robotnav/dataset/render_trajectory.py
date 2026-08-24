@@ -16,7 +16,11 @@ import numpy as np
 import torch
 
 from robotnav.config import RenderConfig, load_render_config
-from robotnav.dataset.batch_manifest import write_batch_manifest
+from robotnav.dataset.batch_manifest import (
+    _camera_is_current,
+    _render_is_current,
+    write_batch_manifest,
+)
 from robotnav.dataset.config import DatasetBuildConfig, load_dataset_build_config
 from robotnav.dataset.contracts import (
     CONTRACT_VERSION,
@@ -361,7 +365,9 @@ def run_render_trajectory(
     )
     scene = load_render_scene(render_config)
     manifest_paths = tuple(
-        render_episode(build_config, render_config, batch, episode, scene)
+        episode.paths.render_manifest_path
+        if _camera_is_current(batch, episode) and _render_is_current(batch, episode)
+        else render_episode(build_config, render_config, batch, episode, scene)
         for episode in batch.episodes
     )
     write_batch_manifest(batch, build_config.paths.batch_manifest_path)

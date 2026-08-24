@@ -1,0 +1,260 @@
+{
+  "status": "FAIL_EXACT_DUPLICATES",
+  "target": "seed19",
+  "batch_summary": {
+    "seed17": {
+      "label": "seed17",
+      "manifest": "/media/ely/新加卷/forth_global_4globalsecond_long100/outputs/trajectories/trajectory_manifest.json",
+      "manifest_sha256": "657540ae735b64dac5878caf7dcbf273e1a36e6158690ed58a5729b2f6dcf48f",
+      "batch_seed": 17,
+      "trajectory_count": 100,
+      "length_m": {
+        "min": 5.440588203494179,
+        "max": 47.17523696620847,
+        "mean": 27.223630715229678
+      }
+    },
+    "seed18": {
+      "label": "seed18",
+      "manifest": "/media/ely/新加卷/forth_global_4globalsecond_long100_seed18/outputs/trajectories/trajectory_manifest.json",
+      "manifest_sha256": "cbf6052f6fb7ee7dd7e4d8d96110395b4f0503697ee626783e0309ed6f23ece8",
+      "batch_seed": 18,
+      "trajectory_count": 100,
+      "length_m": {
+        "min": 6.258434308994545,
+        "max": 49.860245307759236,
+        "mean": 27.179480673781168
+      }
+    },
+    "seed19": {
+      "label": "seed19",
+      "manifest": "/media/ely/新加卷/forth_global_4globalsecond_long100_seed19/outputs/trajectories/trajectory_manifest.json",
+      "manifest_sha256": "8c511ee27e270750b91545f47fa0981c742fe74ca63da60ba0ca14fbf1334964",
+      "batch_seed": 19,
+      "trajectory_count": 100,
+      "length_m": {
+        "min": 6.209669878504012,
+        "max": 48.58950862837377,
+        "mean": 26.62228549009253
+      }
+    }
+  },
+  "target_internal_duplicates": {
+    "raw": [],
+    "quantized_8dp": []
+  },
+  "cross_batch_comparisons": [
+    {
+      "target": "seed19",
+      "reference": "seed17",
+      "raw_exact_match_count": 7,
+      "raw_exact_matches": [
+        [
+          "auto_000",
+          "auto_000"
+        ],
+        [
+          "auto_014",
+          "auto_014"
+        ],
+        [
+          "auto_017",
+          "auto_017"
+        ],
+        [
+          "auto_019",
+          "auto_019"
+        ],
+        [
+          "auto_046",
+          "auto_046"
+        ],
+        [
+          "auto_086",
+          "auto_086"
+        ],
+        [
+          "auto_087",
+          "auto_087"
+        ]
+      ],
+      "quantized_8dp_exact_match_count": 7,
+      "quantized_8dp_exact_matches": [
+        [
+          "auto_000",
+          "auto_000"
+        ],
+        [
+          "auto_014",
+          "auto_014"
+        ],
+        [
+          "auto_017",
+          "auto_017"
+        ],
+        [
+          "auto_019",
+          "auto_019"
+        ],
+        [
+          "auto_046",
+          "auto_046"
+        ],
+        [
+          "auto_086",
+          "auto_086"
+        ],
+        [
+          "auto_087",
+          "auto_087"
+        ]
+      ]
+    },
+    {
+      "target": "seed19",
+      "reference": "seed18",
+      "raw_exact_match_count": 17,
+      "raw_exact_matches": [
+        [
+          "auto_000",
+          "auto_000"
+        ],
+        [
+          "auto_007",
+          "auto_007"
+        ],
+        [
+          "auto_021",
+          "auto_021"
+        ],
+        [
+          "auto_024",
+          "auto_024"
+        ],
+        [
+          "auto_026",
+          "auto_026"
+        ],
+        [
+          "auto_032",
+          "auto_032"
+        ],
+        [
+          "auto_033",
+          "auto_033"
+        ],
+        [
+          "auto_038",
+          "auto_038"
+        ],
+        [
+          "auto_042",
+          "auto_042"
+        ],
+        [
+          "auto_045",
+          "auto_045"
+        ],
+        [
+          "auto_046",
+          "auto_046"
+        ],
+        [
+          "auto_047",
+          "auto_047"
+        ],
+        [
+          "auto_048",
+          "auto_048"
+        ],
+        [
+          "auto_056",
+          "auto_056"
+        ],
+        [
+          "auto_060",
+          "auto_060"
+        ],
+        [
+          "auto_066",
+          "auto_066"
+        ],
+        [
+          "auto_067",
+          "auto_067"
+        ]
+      ],
+      "quantized_8dp_exact_match_count": 17,
+      "quantized_8dp_exact_matches": [
+        [
+          "auto_000",
+          "auto_000"
+        ],
+        [
+          "auto_007",
+          "auto_007"
+        ],
+        [
+          "auto_021",
+          "auto_021"
+        ],
+        [
+          "auto_024",
+          "auto_024"
+        ],
+        [
+          "auto_026",
+          "auto_026"
+        ],
+        [
+          "auto_032",
+          "auto_032"
+        ],
+        [
+          "auto_033",
+          "auto_033"
+        ],
+        [
+          "auto_038",
+          "auto_038"
+        ],
+        [
+          "auto_042",
+          "auto_042"
+        ],
+        [
+          "auto_045",
+          "auto_045"
+        ],
+        [
+          "auto_046",
+          "auto_046"
+        ],
+        [
+          "auto_047",
+          "auto_047"
+        ],
+        [
+          "auto_048",
+          "auto_048"
+        ],
+        [
+          "auto_056",
+          "auto_056"
+        ],
+        [
+          "auto_060",
+          "auto_060"
+        ],
+        [
+          "auto_066",
+          "auto_066"
+        ],
+        [
+          "auto_067",
+          "auto_067"
+        ]
+      ]
+    }
+  ]
+}

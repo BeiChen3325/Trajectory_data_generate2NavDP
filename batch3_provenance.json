@@ -1,0 +1,49 @@
+{
+  "status": "PASS",
+  "dataset_name": "forth_global_4globalsecond_long100_batch3",
+  "root": "/media/ely/新加卷/forth_global_4globalsecond_long100_batch3",
+  "navdp": "/media/ely/新加卷/forth_global_4globalsecond_long100_batch3/NavDP/robotnav/forth_global_4globalsecond_long100_batch3",
+  "git": {
+    "branch": "main",
+    "commit": "71fd9c99acc097f07605d51cbeae6f5977f4ab3b",
+    "core_generation_code_modified_for_batch3": false
+  },
+  "inputs": {
+    "las_sha256": "6d37b310075ad8495fb79dd1d1cc4afd681f9f9ba82da6b9719eb25994120e07",
+    "ply_sha256": "87f2d37665fd3c3937e73e648f2c4353e2174fa4f6273d522e2311204acfa2d5",
+    "scene_model_sha256": "03a687f92dc7aa8a76fb8a425d1e0f69f98511061f0de5ca2466c5a23aff7dda"
+  },
+  "trajectory_assembly": {
+    "strategy": "stable seed19-first selection followed by seed20 manifest order",
+    "seed19_selected": 78,
+    "seed20_selected": 22,
+    "trajectory_count": 100,
+    "internal_exact_duplicates": 0,
+    "seed17_exact_duplicates": 0,
+    "seed18_exact_duplicates": 0,
+    "manifest_sha256": "16b7847f9471688aadede66964f38cd8409c8e4d79bdadffee7e97064cc7a246"
+  },
+  "gpu": {
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "driver": "590.48.01",
+    "nvidia_smi_cuda": "13.1",
+    "torch": "2.13.0+cu130",
+    "torch_cuda": "13.0",
+    "gsplat": "1.5.3",
+    "status": "PASS"
+  },
+  "space_bytes": [
+    {"stage": "before_pointcloud", "free": 196604653568},
+    {"stage": "after_pointcloud", "free": 196510146560},
+    {"stage": "before_camera", "free": 196510146560},
+    {"stage": "after_camera", "free": 196505739264},
+    {"stage": "after_render", "free": 139317481472},
+    {"stage": "after_robotnav", "free": 82030678016},
+    {"stage": "after_navdp", "free": 47914311680},
+    {"stage": "after_validation", "free": 47914311680}
+  ],
+  "minimum_observed_free_bytes": 47914311680,
+  "hard_stop_threshold_bytes": 21474836480,
+  "frames": 83753,
+  "validation": "PASS"
+}

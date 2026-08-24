@@ -1,0 +1,78 @@
+{
+  "status": "PASS",
+  "dataset_root": "/media/ely/\u65b0\u52a0\u5377/forth_global_4globalsecond_seed18_smoke/NavDP",
+  "dataset_length_with_replication": 100,
+  "unique_episode_count": 2,
+  "selected_episode_indices": [
+    0,
+    1
+  ],
+  "sampled_episode_count": 2,
+  "dataloader_batch_count": 1,
+  "dataloader_workers0": "PASS",
+  "dataloader_workers8": "PASS",
+  "dataloader_workers8_batch_count": 1,
+  "pixel_flag_valid_count": 2,
+  "pixel_flag_total_count": 2,
+  "pixel_flag_valid_ratio": 1.0,
+  "runtime_warnings": [],
+  "all_warnings": [],
+  "training_collate_keys": [
+    "batch_augment_critic",
+    "batch_augments",
+    "batch_depth",
+    "batch_ig",
+    "batch_label_critic",
+    "batch_labels",
+    "batch_pg",
+    "batch_rgb",
+    "batch_tg"
+  ],
+  "training_collate_shapes": {
+    "batch_pg": [
+      2,
+      3
+    ],
+    "batch_ig": [
+      2,
+      224,
+      224,
+      6
+    ],
+    "batch_tg": [
+      2,
+      224,
+      224,
+      4
+    ],
+    "batch_rgb": [
+      2,
+      8,
+      224,
+      224,
+      3
+    ],
+    "batch_depth": [
+      2,
+      224,
+      224,
+      1
+    ],
+    "batch_labels": [
+      2,
+      24,
+      3
+    ],
+    "batch_augments": [
+      2,
+      24,
+      3
+    ],
+    "batch_label_critic": [
+      2
+    ],
+    "batch_augment_critic": [
+      2
+    ]
+  }
+}

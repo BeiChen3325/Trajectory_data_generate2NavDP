@@ -1,0 +1,18 @@
+[paths]
+trajectory_manifest = "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke/outputs/trajectories/trajectory_manifest.json"
+semantic_pointcloud_dir = "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke/outputs/semantic_pointcloud"
+semantic_pointcloud_filename = "pointcloud.ply"
+semantic_pointcloud_report_filename = "pointcloud_report.json"
+work_dir = "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke/outputs/dataset_build"
+dataset_root = "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke/RobotNav"
+
+[trajectory_to_camera]
+camera_pose_resource = "src/camera_resource/camera_pose_presets.yaml#presets.current_forward"
+
+[rendering]
+camera_batch_size = 8
+
+[dataset]
+group_dir = "robotnav"
+scene_dir = "forth_global_4globalsecond_seed19_smoke"
+overwrite = false

@@ -1,0 +1,29 @@
+[paths]
+scene_dir = "/media/ely/新加卷/forth_global_4globalsecond_seed18_smoke/outputs/navigation_scene"
+output_dir = "/media/ely/新加卷/forth_global_4globalsecond_seed18_smoke/outputs/trajectories"
+
+[planner]
+obstacle_cost_weight = 0.8
+obstacle_cost_power = 1.5
+shortcut_passes = 120
+smooth_samples_per_meter = 8.0
+smooth_iterations = 2
+
+[trajectory_sampling]
+trajectory_mode = "long"
+min_length_m = 5.0
+max_length_m = 10.0
+
+[valid_region]
+yaml_path = ""
+robot_radius_m = 0.30
+safety_margin_m = 0.10
+
+[trajectory_batch]
+count = 2
+seed = 18
+min_start_goal_distance_m = 3.0
+min_endpoint_separation_m = 0.5
+max_sampling_attempts = 5000
+manifest_filename = "trajectory_manifest.json"
+requests = []

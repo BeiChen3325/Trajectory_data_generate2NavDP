@@ -1,0 +1,27 @@
+{
+  "dataset": "forth_global_4globalsecond_long100_seed18",
+  "git_commit": "71fd9c99acc097f07605d51cbeae6f5977f4ab3b",
+  "generated_at": "2026-08-12 Asia/Shanghai",
+  "input_sha256": {
+    "data/input/4globalsecond.las": "6d37b310075ad8495fb79dd1d1cc4afd681f9f9ba82da6b9719eb25994120e07",
+    "data/input/4globalsecond3DGS_yup.ply": "87f2d37665fd3c3937e73e648f2c4353e2174fa4f6273d522e2311204acfa2d5"
+  },
+  "generation": {
+    "seed": 18,
+    "trajectory_mode": "long",
+    "trajectory_count": 100,
+    "trajectory_length_m": [5.0, 50.0],
+    "enable_roi_crop": false,
+    "total_frames": 83549
+  },
+  "coordinate_contract": {
+    "go2_rep_103": "X forward, Y left, Z up",
+    "las_to_navigation_world": "[X,Y,Z] -> [X,-Z,Y]",
+    "navigation_to_navdp_world": "[x,y,z] -> [x,-z,y]",
+    "camera_extrinsic": "observation.camera_extrinsic = observation.T_base_from_camera = T_base<-camera",
+    "action": "action = T_NavDP-world<-camera",
+    "pixel_goal_projection": "world-to-camera projection uses action, never camera_extrinsic"
+  },
+  "first_batch_navdp": "/media/ely/新加卷/forth_global_4globalsecond_long100/NavDP/robotnav/forth_global_4globalsecond_long100",
+  "second_batch_navdp": "/media/ely/新加卷/forth_global_4globalsecond_long100_seed18/NavDP/robotnav/forth_global_4globalsecond_long100_seed18"
+}

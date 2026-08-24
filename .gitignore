@@ -21,6 +21,8 @@ data/target/*
 !data/input/.gitkeep
 outputs/
 traj_data/
+/RobotNav/
+/NavDP/
 *.las
 *.laz
 *.ply

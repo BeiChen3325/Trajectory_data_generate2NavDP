@@ -1,0 +1,18 @@
+[paths]
+data_dir = "data/input"
+ply_filename = "4globalsecond3DGS_yup.ply"
+las_filename = "4globalsecond.las"
+output_dir = "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke/outputs/render"
+
+[camera]
+calibration_file = "src/camera_resource/realsense_d435i.json"
+stream = "color"
+up_axis = "-y"
+
+[runtime]
+background = "black"
+chunk_size = 1000000
+seed = 19
+
+[render]
+require_cuda = true

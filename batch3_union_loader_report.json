@@ -1,0 +1,82 @@
+{
+  "status": "PASS",
+  "dataset_root": "/media/ely/\u65b0\u52a0\u5377/navdp_long300_union",
+  "dataset_length_with_replication": 15000,
+  "unique_episode_count": 300,
+  "selected_episode_indices": [
+    0,
+    59,
+    119,
+    179,
+    239,
+    299
+  ],
+  "sampled_episode_count": 6,
+  "dataloader_batch_count": 2,
+  "dataloader_workers0": "PASS",
+  "dataloader_workers8": "PASS",
+  "dataloader_workers8_batch_count": 2,
+  "pixel_flag_valid_count": 6,
+  "pixel_flag_total_count": 6,
+  "pixel_flag_valid_ratio": 1.0,
+  "runtime_warnings": [],
+  "all_warnings": [],
+  "training_collate_keys": [
+    "batch_augment_critic",
+    "batch_augments",
+    "batch_depth",
+    "batch_ig",
+    "batch_label_critic",
+    "batch_labels",
+    "batch_pg",
+    "batch_rgb",
+    "batch_tg"
+  ],
+  "training_collate_shapes": {
+    "batch_pg": [
+      4,
+      3
+    ],
+    "batch_ig": [
+      4,
+      224,
+      224,
+      6
+    ],
+    "batch_tg": [
+      4,
+      224,
+      224,
+      4
+    ],
+    "batch_rgb": [
+      4,
+      8,
+      224,
+      224,
+      3
+    ],
+    "batch_depth": [
+      4,
+      224,
+      224,
+      1
+    ],
+    "batch_labels": [
+      4,
+      24,
+      3
+    ],
+    "batch_augments": [
+      4,
+      24,
+      3
+    ],
+    "batch_label_critic": [
+      4
+    ],
+    "batch_augment_critic": [
+      4
+    ]
+  }
+}

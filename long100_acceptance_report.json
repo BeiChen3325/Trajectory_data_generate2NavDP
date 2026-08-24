@@ -1,0 +1,170 @@
+{
+  "status": "PASS",
+  "root": "/media/ely/新加卷/forth_global_4globalsecond_long100",
+  "trajectory": {
+    "count": 100,
+    "mode": "long",
+    "seed": 17,
+    "length_m": {
+      "min": 5.440588203494179,
+      "max": 47.17523696620847,
+      "mean": 27.223630715229678,
+      "std": 11.27889335283483
+    },
+    "frames": {
+      "min": 180,
+      "max": 1520,
+      "mean": 859.19,
+      "std": 377.51250826959364,
+      "total": 85919
+    },
+    "collisions": 0
+  },
+  "counts": {
+    "render_manifests": 100,
+    "raw_rgb_png": 85919,
+    "raw_depth_png": 85919,
+    "robotnav_parquet_files": 100,
+    "robotnav_parquet_rows": 85919,
+    "robotnav_rgb_png": 85919,
+    "robotnav_depth_png": 85919,
+    "navdp_parquet_files": 100,
+    "navdp_parquet_rows": 85919,
+    "navdp_rgb_jpeg": 85919,
+    "navdp_depth_png": 85919
+  },
+  "depth": {
+    "quality_report_count": 100,
+    "saturated_65535_pixels": 0,
+    "total_pixels": 34972469760,
+    "valid_pixels": 19963450974
+  },
+  "contracts": {
+    "missing_required_columns": {},
+    "all_matrices_finite": true,
+    "camera_extrinsic_equals_T_base_from_camera_max_abs_error": 0.0,
+    "camera_extrinsic_times_T_camera_from_base_max_abs_error": 0.0,
+    "converter_index_valid": true,
+    "converter_original_index_valid": true,
+    "converter_episode_count": 100,
+    "converter_frames": 85919,
+    "camera_transform_report": {
+      "max_inverse_error": 0.0,
+      "camera_height_mean": 0.12000000476837158,
+      "camera_height_std": 7.450580596923828e-09,
+      "pose_count": 85919,
+      "ground_base_z_max_abs": 0.0,
+      "camera_forward_trajectory_min_dot": 0.8522161872590476,
+      "camera_forward_trajectory_mean_dot": 0.9999392438444632
+    },
+    "metadata_status": "valid"
+  },
+  "loader": {
+    "status": "PASS",
+    "dataset_root": "/media/ely/新加卷/forth_global_4globalsecond_long100/NavDP",
+    "dataset_length_with_replication": 5000,
+    "unique_episode_count": 100,
+    "selected_episode_indices": [
+      0,
+      5,
+      10,
+      15,
+      20,
+      26,
+      31,
+      36,
+      41,
+      46,
+      52,
+      57,
+      62,
+      67,
+      72,
+      78,
+      83,
+      88,
+      93,
+      99
+    ],
+    "sampled_episode_count": 20,
+    "dataloader_batch_count": 5,
+    "pixel_flag_valid_count": 16,
+    "pixel_flag_total_count": 20,
+    "pixel_flag_valid_ratio": 0.8,
+    "runtime_warnings": [],
+    "all_warnings": [],
+    "training_collate_keys": [
+      "batch_augment_critic",
+      "batch_augments",
+      "batch_depth",
+      "batch_ig",
+      "batch_label_critic",
+      "batch_labels",
+      "batch_pg",
+      "batch_rgb",
+      "batch_tg"
+    ],
+    "training_collate_shapes": {
+      "batch_pg": [
+        4,
+        3
+      ],
+      "batch_ig": [
+        4,
+        224,
+        224,
+        6
+      ],
+      "batch_tg": [
+        4,
+        224,
+        224,
+        4
+      ],
+      "batch_rgb": [
+        4,
+        8,
+        224,
+        224,
+        3
+      ],
+      "batch_depth": [
+        4,
+        224,
+        224,
+        1
+      ],
+      "batch_labels": [
+        4,
+        24,
+        3
+      ],
+      "batch_augments": [
+        4,
+        24,
+        3
+      ],
+      "batch_label_critic": [
+        4
+      ],
+      "batch_augment_critic": [
+        4
+      ]
+    }
+  },
+  "trees": {
+    "outputs": {
+      "file_count": 172455,
+      "size_bytes": 58182466459
+    },
+    "RobotNav": {
+      "file_count": 171941,
+      "size_bytes": 58151013099
+    },
+    "NavDP": {
+      "file_count": 171949,
+      "size_bytes": 34337588267
+    }
+  },
+  "total_size_bytes": 150671067825
+}

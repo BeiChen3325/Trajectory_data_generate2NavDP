@@ -1,0 +1,92 @@
+{
+  "status": "BLOCKED_BEFORE_PRODUCTION_RENDER",
+  "date": "2026-08-12",
+  "git": {
+    "branch": "main",
+    "commit": "71fd9c99acc097f07605d51cbeae6f5977f4ab3b",
+    "core_python_modified_for_seed19": false
+  },
+  "inputs": {
+    "las": {
+      "path": "data/input/4globalsecond.las",
+      "sha256": "6d37b310075ad8495fb79dd1d1cc4afd681f9f9ba82da6b9719eb25994120e07",
+      "status": "PASS"
+    },
+    "ply": {
+      "path": "data/input/4globalsecond3DGS_yup.ply",
+      "sha256": "87f2d37665fd3c3937e73e648f2c4353e2174fa4f6273d522e2311204acfa2d5",
+      "status": "PASS"
+    }
+  },
+  "gpu": {
+    "status": "PASS",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "driver": "590.48.01",
+    "nvidia_smi_cuda": "13.1",
+    "nvcc": "13.0.88",
+    "pytorch": "2.13.0+cu130",
+    "torch_cuda": "13.0",
+    "gsplat": "1.5.3",
+    "cuda_tensor_test": "PASS"
+  },
+  "second_batch": {
+    "status": "PASS",
+    "root": "/media/ely/新加卷/forth_global_4globalsecond_long100_seed18",
+    "dataset_name": "forth_global_4globalsecond_long100_seed18",
+    "seed": 18,
+    "trajectory_count": 100,
+    "total_frames": 83549,
+    "navdp": "/media/ely/新加卷/forth_global_4globalsecond_long100_seed18/NavDP/robotnav/forth_global_4globalsecond_long100_seed18"
+  },
+  "third_batch": {
+    "root": "/media/ely/新加卷/forth_global_4globalsecond_long100_seed19",
+    "dataset_name": "forth_global_4globalsecond_long100_seed19",
+    "seed": 19,
+    "trajectory_mode": "long",
+    "requested_count": 100,
+    "length_range_m": [5.0, 50.0],
+    "enable_roi_crop": false,
+    "path_boundary_check": "PASS",
+    "scene_sha256": "03a687f92dc7aa8a76fb8a425d1e0f69f98511061f0de5ca2466c5a23aff7dda",
+    "trajectory_manifest_sha256": "8c511ee27e270750b91545f47fa0981c742fe74ca63da60ba0ca14fbf1334964",
+    "trajectory_count": 100,
+    "length_m": {
+      "min": 6.209669878504012,
+      "max": 48.58950862837377,
+      "mean": 26.62228549009253
+    },
+    "internal_exact_duplicate_count": 0,
+    "render_started": false,
+    "robotnav_started": false,
+    "navdp_started": false
+  },
+  "smoke": {
+    "status": "PASS",
+    "root": "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke",
+    "trajectory_count": 2,
+    "total_frames": 444,
+    "dataloader_workers0": "PASS",
+    "dataloader_workers8": "PASS",
+    "pixel_flag_valid_ratio": 1.0
+  },
+  "storage": {
+    "filesystem_bytes": 500104687616,
+    "available_bytes_after_smoke_and_trajectory_planning": 196695658496,
+    "first_batch_peak_bytes": 150671067825,
+    "second_batch_peak_bytes": 147478409632,
+    "conservative_third_batch_estimate_bytes": 150671067825,
+    "minimum_25_percent_reserve_bytes": 125026171904,
+    "required_additional_free_bytes_conservative": 79001581233,
+    "status": "FAIL_SAFETY_MARGIN"
+  },
+  "blockers": [
+    {
+      "code": "CROSS_BATCH_EXACT_DUPLICATES",
+      "detail": "seed19 has 7 exact geometry matches with seed17 and 17 exact geometry matches with seed18; user required stopping before full rendering when any exact match exists"
+    },
+    {
+      "code": "USB_SAFETY_MARGIN",
+      "detail": "current free space can hold an estimated batch only by reducing remaining free space below the 25 percent safety reserve"
+    }
+  ]
+}

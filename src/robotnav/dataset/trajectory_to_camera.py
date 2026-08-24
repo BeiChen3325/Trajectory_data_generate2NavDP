@@ -7,11 +7,12 @@ from pathlib import Path
 
 import numpy as np
 
-from robotnav.dataset.batch_manifest import write_batch_manifest
+from robotnav.dataset.batch_manifest import _camera_is_current, write_batch_manifest
 from robotnav.dataset.config import DatasetBuildConfig, load_dataset_build_config
 from robotnav.dataset.contracts import (
     CONTRACT_VERSION,
     CameraTrajectory,
+    load_camera_trajectory,
     save_camera_trajectory,
 )
 from robotnav.dataset.trajectory_manifest import (
@@ -297,7 +298,13 @@ def run_trajectory_to_camera(
         config.paths.episodes_dir,
     )
     trajectories = tuple(
-        build_episode_camera_trajectory(episode, batch, config) for episode in batch.episodes
+        load_camera_trajectory(
+            episode.paths.camera_trajectory_path,
+            episode.paths.camera_manifest_path,
+        )
+        if _camera_is_current(batch, episode)
+        else build_episode_camera_trajectory(episode, batch, config)
+        for episode in batch.episodes
     )
     write_batch_manifest(batch, config.paths.batch_manifest_path)
     return batch, trajectories

@@ -1,0 +1,156 @@
+{
+  "status": "PASS",
+  "root": "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke",
+  "trajectory": {
+    "count": 2,
+    "mode": "long",
+    "seed": 19,
+    "length_m": {
+      "min": 5.529846290811346,
+      "max": 7.993997748310918,
+      "mean": 6.761922019561132,
+      "std": 1.2320757287497863
+    },
+    "frames": {
+      "min": 184,
+      "max": 260,
+      "mean": 222.0,
+      "std": 38.0,
+      "total": 444
+    },
+    "collisions": 0
+  },
+  "counts": {
+    "render_manifests": 2,
+    "raw_rgb_png": 444,
+    "raw_depth_png": 444,
+    "robotnav_parquet_files": 2,
+    "robotnav_parquet_rows": 444,
+    "robotnav_rgb_png": 444,
+    "robotnav_depth_png": 444,
+    "navdp_parquet_files": 2,
+    "navdp_parquet_rows": 444,
+    "navdp_rgb_jpeg": 444,
+    "navdp_depth_png": 444
+  },
+  "depth": {
+    "quality_report_count": 2,
+    "saturated_65535_pixels": 0,
+    "total_pixels": 180725760,
+    "valid_pixels": 82541253
+  },
+  "contracts": {
+    "missing_required_columns": {},
+    "all_matrices_finite": true,
+    "camera_extrinsic_equals_T_base_from_camera_max_abs_error": 0.0,
+    "camera_extrinsic_times_T_camera_from_base_max_abs_error": 0.0,
+    "action_equals_T_NavDP_world_from_camera_max_abs_error": 0.0,
+    "converter_index_valid": true,
+    "converter_original_index_valid": true,
+    "converter_episode_count": 2,
+    "converter_frames": 444,
+    "camera_transform_report": {
+      "max_inverse_error": 0.0,
+      "camera_height_mean": 0.11999999731779099,
+      "camera_height_std": 0.0,
+      "pose_count": 444,
+      "ground_base_z_max_abs": 0.0,
+      "camera_forward_trajectory_min_dot": 1.0000000136695866,
+      "camera_forward_trajectory_mean_dot": 1.0000000181119582
+    },
+    "metadata_status": "valid"
+  },
+  "loader": {
+    "status": "PASS",
+    "dataset_root": "/media/ely/新加卷/forth_global_4globalsecond_seed19_smoke/NavDP",
+    "dataset_length_with_replication": 100,
+    "unique_episode_count": 2,
+    "selected_episode_indices": [
+      0,
+      1
+    ],
+    "sampled_episode_count": 2,
+    "dataloader_batch_count": 1,
+    "dataloader_workers0": "PASS",
+    "dataloader_workers8": "PASS",
+    "dataloader_workers8_batch_count": 1,
+    "pixel_flag_valid_count": 2,
+    "pixel_flag_total_count": 2,
+    "pixel_flag_valid_ratio": 1.0,
+    "runtime_warnings": [],
+    "all_warnings": [],
+    "training_collate_keys": [
+      "batch_augment_critic",
+      "batch_augments",
+      "batch_depth",
+      "batch_ig",
+      "batch_label_critic",
+      "batch_labels",
+      "batch_pg",
+      "batch_rgb",
+      "batch_tg"
+    ],
+    "training_collate_shapes": {
+      "batch_pg": [
+        2,
+        3
+      ],
+      "batch_ig": [
+        2,
+        224,
+        224,
+        6
+      ],
+      "batch_tg": [
+        2,
+        224,
+        224,
+        4
+      ],
+      "batch_rgb": [
+        2,
+        8,
+        224,
+        224,
+        3
+      ],
+      "batch_depth": [
+        2,
+        224,
+        224,
+        1
+      ],
+      "batch_labels": [
+        2,
+        24,
+        3
+      ],
+      "batch_augments": [
+        2,
+        24,
+        3
+      ],
+      "batch_label_critic": [
+        2
+      ],
+      "batch_augment_critic": [
+        2
+      ]
+    }
+  },
+  "trees": {
+    "outputs": {
+      "file_count": 917,
+      "size_bytes": 367586442
+    },
+    "RobotNav": {
+      "file_count": 893,
+      "size_bytes": 364813025
+    },
+    "NavDP": {
+      "file_count": 901,
+      "size_bytes": 149139280
+    }
+  },
+  "total_size_bytes": 881538747
+}
